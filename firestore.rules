@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function myEmp() {
+      return get(/databases/$(database)/documents/employees/$(request.auth.uid)).data;
+    }
+    function isSuperAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/employees/$(request.auth.uid))
+        && myEmp().role == 'superadmin';
+    }
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/employees/$(request.auth.uid))
+        && myEmp().role == 'admin';
+    }
+    function adminProjects() {
+      return 'adminProjects' in myEmp() ? myEmp().adminProjects : [];
+    }
+    function isAdminOf(pid) {
+      return isAdmin() && (
+        adminProjects().hasAny([pid])
+        || ('projectId' in myEmp() && myEmp().projectId == pid)
+      );
+    }
+    function isAdminOfAny(pids) {
+      return isAdmin() && (
+        adminProjects().hasAny(pids)
+        || ('projectId' in myEmp() && pids.hasAny([myEmp().projectId]))
+      );
+    }
+    function empProjectIds(emp) {
+      return ('projectIds' in emp && emp.projectIds is list) ? emp.projectIds
+             : ('projectId' in emp && emp.projectId != null) ? [emp.projectId] : [];
+    }
+
+    match /projects/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    match /employees/{uid} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == uid
+        || isSuperAdmin()
+        || isAdminOfAny(empProjectIds(resource.data))
+      );
+      allow create: if isSuperAdmin()
+        || (isSignedIn() && request.auth.uid == uid)
+        || isAdminOfAny(empProjectIds(request.resource.data));
+      allow update: if isSuperAdmin()
+        || isAdminOfAny(empProjectIds(resource.data))
+        || (isSignedIn() && request.auth.uid == uid);
+      allow delete: if isSuperAdmin() || isAdminOfAny(empProjectIds(resource.data));
+    }
+
+    match /attendance/{id} {
+      allow read: if isSignedIn() && (
+        isSuperAdmin()
+        || resource.data.uid == request.auth.uid
+        || isAdminOf(resource.data.projectId)
+      );
+      allow create: if isSuperAdmin()
+        || (isSignedIn() && request.resource.data.uid == request.auth.uid)
+        || isAdminOf(request.resource.data.projectId);
+      allow update: if isSuperAdmin()
+        || isAdminOf(resource.data.projectId)
+        || (isSignedIn()
+            && resource.data.uid == request.auth.uid
+            && request.resource.data.uid == resource.data.uid);
+      allow delete: if isSuperAdmin() || isAdminOf(resource.data.projectId);
+    }
+
+    match /offices/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    match /meta/{id} {
+      allow read: if isSuperAdmin() || isAdmin();
+      allow write: if isSuperAdmin() || isAdmin();
+    }
+
+  }
+}
