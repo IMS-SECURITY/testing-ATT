@@ -4,11 +4,8 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
-  HeadContent,
-  Scripts,
 } from "@tanstack/react-router";
 
-import appCss from "../styles.css?url";
 import { AuthProvider } from "@/lib/auth-context";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -70,49 +67,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "TVSE Attendance Monitoring" },
-      { name: "description", content: "Attendance Monitoring by TVSE" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "TVSE Attendance Monitoring" },
-      { property: "og:description", content: "Attendance Monitoring by TVSE" },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "TVSE Attendance Monitoring" },
-      { name: "twitter:description", content: "Attendance Monitoring by TVSE" },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ea55ff87-eebc-4967-bb14-b527074d0ac3/id-preview-81f1ea8c--505449bb-db65-4791-ae82-455ee68152e5.lovable.app-1780550528890.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ea55ff87-eebc-4967-bb14-b527074d0ac3/id-preview-81f1ea8c--505449bb-db65-4791-ae82-455ee68152e5.lovable.app-1780550528890.png" },
-    ],
-    links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-    ],
-  }),
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
-
-function RootShell({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();

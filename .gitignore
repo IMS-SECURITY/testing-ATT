@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.output/
+.vinxi/
+.env
+.env.*
+!.env.example
+*.local
+.DS_Store
+Thumbs.db
