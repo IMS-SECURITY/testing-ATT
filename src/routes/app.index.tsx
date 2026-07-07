@@ -478,7 +478,7 @@ function PunchPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="rounded-lg p-4 fancy-gradient text-white">
+      <div className="rounded-lg p-4 fancy-gradient text-white card-entrance shimmer-card relative shadow-md">
         <h1 className="text-2xl font-bold">Welcome, {profile?.name}</h1>
         <p className="text-sm opacity-90">Employee ID: {profile?.employeeID}</p>
       </div>
@@ -491,7 +491,7 @@ function PunchPage() {
         </TabsList>
 
         <TabsContent value="attendance" className="space-y-4">
-          <Card>
+          <Card className="card-hover card-entrance">
             <CardHeader>
               <CardTitle>{hasPunchedOut ? "Today's attendance" : hasPunchedIn ? "Punch Out" : "Punch In"}</CardTitle>
               <CardDescription>
@@ -566,7 +566,7 @@ function PunchPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="card-hover card-entrance">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-4 w-4" /> Today
@@ -598,7 +598,7 @@ function PunchPage() {
           </Card>
 
           {blockedByApprovedRequest ? (
-            <Card>
+            <Card className="card-hover card-entrance border-destructive/20">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Clock className="h-4 w-4" /> Notice
@@ -621,7 +621,7 @@ function PunchPage() {
             </Card>
           ) : null}
 
-          <Card>
+          <Card className="card-hover card-entrance">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-4 w-4" /> Past attendance
@@ -664,7 +664,7 @@ function PunchPage() {
         </TabsContent>
 
         <TabsContent value="leave" className="space-y-4">
-          <Card>
+          <Card className="card-hover card-entrance">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" /> Apply for Leave
@@ -737,7 +737,7 @@ function PunchPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="card-hover card-entrance">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-4 w-4" /> Recent Leave Requests
@@ -782,7 +782,7 @@ function PunchPage() {
         </TabsContent>
 
         <TabsContent value="wfh" className="space-y-4">
-          <Card>
+          <Card className="card-hover card-entrance">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Home className="h-4 w-4" /> Apply for Work From Home
@@ -843,7 +843,7 @@ function PunchPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="card-hover card-entrance">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-4 w-4" /> Recent WFH Requests
