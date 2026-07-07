@@ -1,37 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 240" role="img" aria-labelledby="tvs-title tvs-desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 170" role="img" aria-labelledby="tvs-title tvs-desc">
   <title id="tvs-title">TVS Electronics</title>
   <desc id="tvs-desc">Official Logo of TVS Electronics</desc>
   <defs>
     <style>
-      .logo-ellipse {
-        fill: none;
-        stroke: #007bc4;
-        stroke-width: 12;
-      }
-      .logo-tvs {
-        font-family: "Arial Black", "Impact", -apple-system, sans-serif;
+      .logo-tvse {
+        font-family: "Arial Black", -apple-system, sans-serif;
         font-weight: 900;
-        fill: #007bc4;
+        fill: #229be3;
         text-anchor: middle;
-        font-style: italic;
       }
-      .logo-electronics {
-        font-family: "Arial", -apple-system, sans-serif;
+      .logo-desc {
+        font-family: "Arial Black", -apple-system, sans-serif;
         font-weight: 900;
-        fill: #007bc4;
+        fill: #229be3;
         text-anchor: middle;
-        font-style: italic;
       }
     </style>
   </defs>
-  <!-- Main Oval -->
-  <ellipse cx="250" cy="120" rx="230" ry="105" class="logo-ellipse" />
-  
-  <!-- Slanted text to match the italicized TVSE brand font slant -->
-  <g transform="translate(250, 120) skewX(-14) translate(-250, -120)">
-    <!-- TVS text -->
-    <text x="250" y="115" font-size="100" class="logo-tvs" letter-spacing="-3px">TVS</text>
-    <!-- ELECTRONICS text -->
-    <text x="250" y="158" font-size="24" class="logo-electronics" letter-spacing="1px">ELECTRONICS</text>
+  <!-- Group to center and slant the entire logo text together -->
+  <g transform="translate(250, 85) skewX(-12) translate(-250, -85)">
+    <!-- TVSE Text -->
+    <text x="250" y="92" font-size="120" class="logo-tvse" letter-spacing="-3px">TVSE</text>
+    <!-- TVS ELECTRONICS Text -->
+    <text x="250" y="138" font-size="30" class="logo-desc" letter-spacing="-0.5px">TVS ELECTRONICS</text>
   </g>
 </svg>
