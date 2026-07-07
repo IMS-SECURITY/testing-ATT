@@ -132,6 +132,106 @@
   --sidebar-ring: oklch(0.551 0.027 264.364);
 }
 
+/* Additional design tokens for gradients & motion */
+:root {
+  --gradient-1: oklch(0.62 0.18 268.0);
+  --gradient-2: oklch(0.72 0.16 240.0);
+  --accent-glow: oklch(0.85 0.22 260.0 / 0.25);
+  --motion-fast: 160ms;
+  --motion-medium: 320ms;
+  --motion-slow: 520ms;
+}
+
+.dark {
+  --gradient-1: oklch(0.48 0.12 270.0);
+  --gradient-2: oklch(0.36 0.10 240.0);
+  --accent-glow: oklch(0.65 0.18 260.0 / 0.18);
+}
+
+@layer base {
+  /* Gentle page gradient */
+  body {
+    background-image: linear-gradient(135deg, color-mix(in oklch, var(--gradient-1) 70%, transparent), color-mix(in oklch, var(--gradient-2) 40%));
+    background-attachment: fixed;
+    background-size: 120% 120%;
+    transition: background-position var(--motion-slow) ease;
+  }
+
+  /* Keyframe animations */
+  @keyframes slideUpFade {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes floatY {
+    0% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+    100% { transform: translateY(0); }
+  }
+
+  @keyframes pulseGlow {
+    0% { box-shadow: 0 0 0px color-mix(in oklch, var(--accent-glow) 0%); }
+    50% { box-shadow: 0 6px 18px color-mix(in oklch, var(--accent-glow) 100%); }
+    100% { box-shadow: 0 0 0px color-mix(in oklch, var(--accent-glow) 0%); }
+  }
+
+  /* Utility classes for subtle motion */
+  .card-entrance { animation: slideUpFade var(--motion-medium) ease both; }
+  .float-slow { animation: floatY 6s ease-in-out infinite; }
+  .pulse-glow { animation: pulseGlow 2.4s ease-in-out infinite; }
+
+  /* Animated gradient for highlighted UI elements */
+  .fancy-gradient {
+    background: linear-gradient(90deg, var(--gradient-1), var(--gradient-2));
+    background-size: 200% 200%;
+    transition: background-position var(--motion-slow) ease;
+  }
+  .fancy-gradient:hover { background-position: 100% 0; }
+
+  /* Button polish */
+  .btn-animated {
+    transition: transform var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+    will-change: transform;
+  }
+  .btn-animated:hover { transform: translateY(-3px); box-shadow: 0 8px 24px color-mix(in oklch, var(--accent-glow) 90%); }
+  .btn-animated:active { transform: translateY(-1px) scale(0.995); }
+
+  /* Card hover lift */
+  .card-hover { transition: transform var(--motion-medium) ease, box-shadow var(--motion-medium) ease; }
+  .card-hover:hover { transform: translateY(-6px); box-shadow: 0 10px 30px color-mix(in oklch, var(--accent-glow) 70%); }
+
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .card-entrance, .float-slow, .pulse-glow, .btn-animated, .card-hover { animation: none !important; transition: none !important; }
+  }
+}
+
+/* Alternate palettes: add one of these classes to <body> to switch look
+   e.g. <body class="palette-teal"> or via JS: document.documentElement.classList.add('palette-warm') */
+.palette-teal {
+  --gradient-1: oklch(0.66 0.15 200.0);
+  --gradient-2: oklch(0.62 0.14 270.0);
+  --accent-glow: oklch(0.80 0.20 240.0 / 0.22);
+  --primary: oklch(0.12 0.04 260.0);
+  --primary-foreground: oklch(0.98 0.01 260.0);
+}
+
+.palette-warm {
+  --gradient-1: oklch(0.74 0.18 95.0);
+  --gradient-2: oklch(0.62 0.18 45.0);
+  --accent-glow: oklch(0.82 0.22 50.0 / 0.22);
+  --primary: oklch(0.10 0.04 40.0);
+  --primary-foreground: oklch(0.98 0.01 40.0);
+}
+
+.palette-cool {
+  --gradient-1: oklch(0.68 0.16 220.0);
+  --gradient-2: oklch(0.56 0.14 200.0);
+  --accent-glow: oklch(0.70 0.18 210.0 / 0.2);
+  --primary: oklch(0.11 0.03 210.0);
+  --primary-foreground: oklch(0.98 0.01 210.0);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);

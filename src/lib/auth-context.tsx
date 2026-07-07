@@ -134,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
+      console.debug("onAuthStateChanged", { email: u?.email, uid: u?.uid });
       setUser(u);
       if (u) {
         try {
@@ -166,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       try {
         const credential = await signInWithEmailAndPassword(auth, email, password);
+        console.debug("signIn success", { email: credential.user.email, uid: credential.user.uid });
         setUser(credential.user);
         const p = await loadProfile(credential.user);
         if (p) {

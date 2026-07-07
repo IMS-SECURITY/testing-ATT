@@ -48,6 +48,8 @@ interface Row {
   projectName?: string | null;
   status?: string;
   onDutyAtName?: string;
+  leaveReason?: string;
+  wfhReason?: string;
 }
 
 
@@ -263,13 +265,25 @@ function AttendancePage() {
                           <td className="p-3 font-mono">
                             {r.status === "on_duty"
                               ? <span className="rounded bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700">On Duty{r.onDutyAtName ? ` @ ${r.onDutyAtName}` : ""}</span>
+                              : r.status === "leave"
+                              ? <span className="rounded bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-700">Leave</span>
+                              : r.status === "wfh"
+                              ? <span className="rounded bg-blue-500/15 px-2 py-0.5 text-xs font-semibold text-blue-700">WFH</span>
                               : r.time}
                           </td>
-                          <td className="p-3 font-mono">{r.status === "on_duty" ? "—" : (r.punchOutTime ?? <span className="text-muted-foreground">—</span>)}</td>
+                          <td className="p-3 font-mono">
+                            {r.status === "on_duty" || r.status === "leave" || r.status === "wfh"
+                              ? "—"
+                              : (r.punchOutTime ?? <span className="text-muted-foreground">—</span>)}
+                          </td>
                           <td className="p-3">{r.name}</td>
                           <td className="p-3 font-mono text-xs">{r.employeeID}</td>
                           <td className="p-3 text-xs">{r.projectId ?? <span className="text-muted-foreground">—</span>}</td>
-                          <td className="p-3 text-xs text-muted-foreground">{r.lat?.toFixed(5)}, {r.lng?.toFixed(5)}</td>
+                          <td className="p-3 text-xs text-muted-foreground">
+                            {r.status === "leave" || r.status === "wfh"
+                              ? r.status === "leave" ? r.leaveReason : r.wfhReason
+                              : `${r.lat?.toFixed(5)}, ${r.lng?.toFixed(5)}`}
+                          </td>
                           <td className="p-3">
                             <div className="flex justify-end gap-1">
                               <Button size="sm" variant="ghost" onClick={() => { setEditing(r); setEditOpen(true); }}><Pencil className="h-4 w-4" /></Button>

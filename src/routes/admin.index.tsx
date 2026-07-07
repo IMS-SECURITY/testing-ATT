@@ -271,6 +271,19 @@ function AdminDashboard() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Leave & WFH Requests</CardTitle>
+            <CardDescription>Manage employee leave and work from home requests</CardDescription>
+          </div>
+          <Link to="/admin/requests"><Button size="sm">Manage</Button></Link>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">Review and approve pending leave and WFH requests from employees.</p>
+        </CardContent>
+      </Card>
+
       <Dialog open={showUnpunched} onOpenChange={setShowUnpunched}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>

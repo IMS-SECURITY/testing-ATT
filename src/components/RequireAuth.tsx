@@ -75,9 +75,8 @@ export function RequireAuth({
     <div className="flex min-h-screen flex-col bg-background">
       <header className="sticky top-0 z-20 border-b bg-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
-          <Link to={homeFor(profile.role)} className="flex items-center gap-2 font-semibold">
-            <MapPin className="h-5 w-5 text-primary" />
-            <span>Attendance</span>
+          <Link to={homeFor(profile.role)} className="flex items-center gap-3 font-semibold">
+            <img src="/tvs-logo.svg" alt="TVS Electronics" className="h-10 w-auto" />
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
             {isSuper && (

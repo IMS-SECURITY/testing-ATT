@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AppChangePasswordRouteImport } from './routes/app.change-password'
+import { Route as AdminRequestsRouteImport } from './routes/admin.requests'
 import { Route as AdminEmployeesRouteImport } from './routes/admin.employees'
 import { Route as AdminAttendanceRouteImport } from './routes/admin.attendance'
 
@@ -48,6 +49,11 @@ const AppChangePasswordRoute = AppChangePasswordRouteImport.update({
   path: '/app/change-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRequestsRoute = AdminRequestsRouteImport.update({
+  id: '/admin/requests',
+  path: '/admin/requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminEmployeesRoute = AdminEmployeesRouteImport.update({
   id: '/admin/employees',
   path: '/admin/employees',
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/super': typeof SuperRoute
   '/admin/attendance': typeof AdminAttendanceRoute
   '/admin/employees': typeof AdminEmployeesRoute
+  '/admin/requests': typeof AdminRequestsRoute
   '/app/change-password': typeof AppChangePasswordRoute
   '/admin/': typeof AdminIndexRoute
   '/app/': typeof AppIndexRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/super': typeof SuperRoute
   '/admin/attendance': typeof AdminAttendanceRoute
   '/admin/employees': typeof AdminEmployeesRoute
+  '/admin/requests': typeof AdminRequestsRoute
   '/app/change-password': typeof AppChangePasswordRoute
   '/admin': typeof AdminIndexRoute
   '/app': typeof AppIndexRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/super': typeof SuperRoute
   '/admin/attendance': typeof AdminAttendanceRoute
   '/admin/employees': typeof AdminEmployeesRoute
+  '/admin/requests': typeof AdminRequestsRoute
   '/app/change-password': typeof AppChangePasswordRoute
   '/admin/': typeof AdminIndexRoute
   '/app/': typeof AppIndexRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/super'
     | '/admin/attendance'
     | '/admin/employees'
+    | '/admin/requests'
     | '/app/change-password'
     | '/admin/'
     | '/app/'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/super'
     | '/admin/attendance'
     | '/admin/employees'
+    | '/admin/requests'
     | '/app/change-password'
     | '/admin'
     | '/app'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/super'
     | '/admin/attendance'
     | '/admin/employees'
+    | '/admin/requests'
     | '/app/change-password'
     | '/admin/'
     | '/app/'
@@ -129,6 +141,7 @@ export interface RootRouteChildren {
   SuperRoute: typeof SuperRoute
   AdminAttendanceRoute: typeof AdminAttendanceRoute
   AdminEmployeesRoute: typeof AdminEmployeesRoute
+  AdminRequestsRoute: typeof AdminRequestsRoute
   AppChangePasswordRoute: typeof AppChangePasswordRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -178,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChangePasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/requests': {
+      id: '/admin/requests'
+      path: '/admin/requests'
+      fullPath: '/admin/requests'
+      preLoaderRoute: typeof AdminRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/employees': {
       id: '/admin/employees'
       path: '/admin/employees'
@@ -201,6 +221,7 @@ const rootRouteChildren: RootRouteChildren = {
   SuperRoute: SuperRoute,
   AdminAttendanceRoute: AdminAttendanceRoute,
   AdminEmployeesRoute: AdminEmployeesRoute,
+  AdminRequestsRoute: AdminRequestsRoute,
   AppChangePasswordRoute: AppChangePasswordRoute,
   AdminIndexRoute: AdminIndexRoute,
   AppIndexRoute: AppIndexRoute,

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -60,6 +61,7 @@ interface FormState {
   password: string;
   role: "employee" | "admin";
   totalLeaves: string;
+  usedLeaves: string;
   branches: string;
   assignments: Assignment[];
 }
@@ -71,6 +73,7 @@ const emptyForm: FormState = {
   password: "",
   role: "employee",
   totalLeaves: "12",
+  usedLeaves: "0",
   branches: "",
   assignments: [],
 };
@@ -201,6 +204,7 @@ function EmployeesPage() {
       password: "",
       role: (r.role === "superadmin" ? "admin" : r.role) as "employee" | "admin",
       totalLeaves: String(r.totalLeaves ?? 12),
+      usedLeaves: String(r.usedLeaves ?? 0),
       branches: (r.branches ?? []).join(", "),
       assignments: deriveAssignments(r),
     });
@@ -269,6 +273,7 @@ function EmployeesPage() {
       if (isNaN(a.officeLat) || isNaN(a.officeLng)) return toast.error(`Invalid coordinates for ${a.projectId}`);
     }
     const totalLeaves = parseInt(form.totalLeaves, 10) || 0;
+    const usedLeaves = parseInt(form.usedLeaves, 10) || 0;
     const branches = form.branches.split(",").map((s) => s.trim()).filter(Boolean);
     const primary = cleaned[0];
     const projectIds = cleaned.map((a) => a.projectId);
@@ -280,6 +285,7 @@ function EmployeesPage() {
           name: form.name,
           role: form.role,
           totalLeaves,
+          usedLeaves,
           branches,
           assignments: cleaned,
           projectIds,
@@ -450,113 +456,115 @@ function EmployeesPage() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit employee" : "New employee"}</DialogTitle>
             <DialogDescription>
               Assign one or more projects and pick the office location for each. Coordinates come from the office master data.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={save} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Employee ID</Label>
-                <Input
-                  value={form.employeeID}
-                  onChange={(e) => setForm({ ...form, employeeID: e.target.value })}
-                  required
-                  readOnly={!editing}
-                  className={!editing ? "bg-muted" : undefined}
-                />
-                {!editing && <p className="text-xs text-muted-foreground">Auto-generated in series (EMP001, EMP002, …)</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Role</Label>
-                <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as "employee" | "admin" })}>
-                  <option value="employee">Employee</option>
-                  <option value="admin" disabled={!isSuper}>Admin (super only)</option>
-                </select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Name</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required disabled={!!editing} />
-            </div>
-            {!editing && (
-              <div className="space-y-1.5">
-                <Label>Initial password</Label>
-                <Input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={6} />
-              </div>
-            )}
-
-            <div className="space-y-2 rounded-md border p-3">
-              <div className="flex items-center justify-between">
-                <Label>Project assignments</Label>
-                <Button type="button" size="sm" variant="outline" onClick={addAssignmentRow}>
-                  <Plus className="mr-1 h-3 w-3" /> Add project
-                </Button>
-              </div>
-              {form.assignments.length === 0 && (
-                <p className="text-xs text-muted-foreground">No projects assigned yet.</p>
-              )}
-              {form.assignments.map((a, idx) => {
-                const locs = officesForProject(a.projectId);
-                return (
-                <div key={idx} className="grid grid-cols-12 gap-2 rounded-md bg-muted/40 p-2">
-                  <div className="col-span-5 space-y-1">
-                    <Label className="text-xs">Project</Label>
-                    <select
-                      className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                      value={a.projectId}
-                      onChange={(e) => updateAssignment(idx, { projectId: e.target.value })}
-                      required
-                    >
-                      <option value="">Select…</option>
-                      {projects.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-span-5 space-y-1">
-                    <Label className="text-xs">Office location</Label>
-                    <select
-                      className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                      value={a.officeId ?? ""}
-                      onChange={(e) => updateAssignment(idx, { officeId: e.target.value })}
-                      required
-                      disabled={!a.projectId}
-                    >
-                      <option value="">{a.projectId ? (locs.length ? "Select…" : "No offices — add in Super Admin") : "Select project first"}</option>
-                      {locs.map((o) => (
-                        <option key={o.id} value={o.id}>{o.name}</option>
-                      ))}
-                    </select>
-                    {a.officeLat && a.officeLng ? (
-                      <p className="text-[10px] text-muted-foreground font-mono">{a.officeLat.toFixed(5)}, {a.officeLng.toFixed(5)}</p>
-                    ) : null}
-                  </div>
-                  <div className="col-span-2 flex items-end justify-end">
-                    <Button type="button" size="sm" variant="ghost" onClick={() => removeAssignment(idx)}>
-                      <X className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
+          <ScrollArea className="flex-1 px-1">
+            <form onSubmit={save} className="space-y-3 pr-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Employee ID</Label>
+                  <Input
+                    value={form.employeeID}
+                    onChange={(e) => setForm({ ...form, employeeID: e.target.value })}
+                    required
+                    readOnly={!editing}
+                    className={!editing ? "bg-muted" : undefined}
+                  />
+                  {!editing && <p className="text-xs text-muted-foreground">Auto-generated in series (EMP001, EMP002, …)</p>}
                 </div>
-              );})}
-            </div>
+                <div className="space-y-1.5">
+                  <Label>Role</Label>
+                  <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as "employee" | "admin" })}>
+                    <option value="employee">Employee</option>
+                    <option value="admin" disabled={!isSuper}>Admin (super only)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Name</Label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Email</Label>
+                <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required disabled={!!editing} />
+              </div>
+              {!editing && (
+                <div className="space-y-1.5">
+                  <Label>Initial password</Label>
+                  <Input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={6} />
+                </div>
+              )}
 
-            <div className="space-y-1.5">
-              <Label>Total leaves</Label>
-              <Input type="number" min="0" value={form.totalLeaves} onChange={(e) => setForm({ ...form, totalLeaves: e.target.value })} required />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save"}</Button>
-            </DialogFooter>
-          </form>
+              <div className="space-y-2 rounded-md border p-3">
+                <div className="flex items-center justify-between">
+                  <Label>Project assignments</Label>
+                  <Button type="button" size="sm" variant="outline" onClick={addAssignmentRow}>
+                    <Plus className="mr-1 h-3 w-3" /> Add project
+                  </Button>
+                </div>
+                {form.assignments.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No projects assigned yet.</p>
+                )}
+                {form.assignments.map((a, idx) => {
+                  const locs = officesForProject(a.projectId);
+                  return (
+                  <div key={idx} className="grid grid-cols-12 gap-2 rounded-md bg-muted/40 p-2">
+                    <div className="col-span-5 space-y-1">
+                      <Label className="text-xs">Project</Label>
+                      <select
+                        className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                        value={a.projectId}
+                        onChange={(e) => updateAssignment(idx, { projectId: e.target.value })}
+                        required
+                      >
+                        <option value="">Select…</option>
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-5 space-y-1">
+                      <Label className="text-xs">Office location</Label>
+                      <select
+                        className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                        value={a.officeId ?? ""}
+                        onChange={(e) => updateAssignment(idx, { officeId: e.target.value })}
+                        required
+                        disabled={!a.projectId}
+                      >
+                        <option value="">{a.projectId ? (locs.length ? "Select…" : "No offices — add in Super Admin") : "Select project first"}</option>
+                        {locs.map((o) => (
+                          <option key={o.id} value={o.id}>{o.name}</option>
+                        ))}
+                      </select>
+                      {a.officeLat && a.officeLng ? (
+                        <p className="text-[10px] text-muted-foreground font-mono">{a.officeLat.toFixed(5)}, {a.officeLng.toFixed(5)}</p>
+                      ) : null}
+                    </div>
+                    <div className="col-span-2 flex items-end justify-end">
+                      <Button type="button" size="sm" variant="ghost" onClick={() => removeAssignment(idx)}>
+                        <X className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                );})}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Total leaves</Label>
+                <Input type="number" min="0" value={form.totalLeaves} onChange={(e) => setForm({ ...form, totalLeaves: e.target.value })} required />
+              </div>
+            </form>
+          </ScrollArea>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={busy} onClick={(e) => { e.preventDefault(); save(e); }}>{busy ? "Saving…" : "Save"}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

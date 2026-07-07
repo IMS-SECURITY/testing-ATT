@@ -72,6 +72,36 @@ service cloud.firestore {
       allow delete: if isSuperAdmin() || isAdminOf(resource.data.projectId);
     }
 
+    match /leaveRequests/{id} {
+      allow read: if isSignedIn() && (
+        isSuperAdmin()
+        || (isSignedIn() && resource.data.uid == request.auth.uid)
+        || isAdminOf(resource.data.projectId)
+      );
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isSuperAdmin()
+        || isAdminOf(resource.data.projectId)
+        || (isSignedIn()
+            && resource.data.uid == request.auth.uid
+            && request.resource.data.uid == resource.data.uid);
+      allow delete: if isSuperAdmin() || isAdminOf(resource.data.projectId);
+    }
+
+    match /wfhRequests/{id} {
+      allow read: if isSignedIn() && (
+        isSuperAdmin()
+        || (isSignedIn() && resource.data.uid == request.auth.uid)
+        || isAdminOf(resource.data.projectId)
+      );
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isSuperAdmin()
+        || isAdminOf(resource.data.projectId)
+        || (isSignedIn()
+            && resource.data.uid == request.auth.uid
+            && request.resource.data.uid == resource.data.uid);
+      allow delete: if isSuperAdmin() || isAdminOf(resource.data.projectId);
+    }
+
     match /offices/{id} {
       allow read: if isSignedIn();
       allow write: if isSuperAdmin();

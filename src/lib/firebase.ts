@@ -1,19 +1,30 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBgJiz1G6YReokfrWOTEPfpfz0LoNwwsuw",
-  authDomain: "attendance-management-f3b85.firebaseapp.com",
-  projectId: "attendance-management-f3b85",
-  storageBucket: "attendance-management-f3b85.firebasestorage.app",
-  messagingSenderId: "290989855696",
-  appId: "1:290989855696:web:48666bd856a7169cee5fd5",
+  apiKey: "AIzaSyC2Wt_fjzJwApYTBCIeObz1-EhVYvwE3V0",
+  authDomain: "testing-att.firebaseapp.com",
+  projectId: "testing-att",
+  storageBucket: "testing-att.firebasestorage.app",
+  messagingSenderId: "774101216919",
+  appId: "1:774101216919:web:7fd8303c281304490dc3d2"
 };
 
 export const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// Initialize Analytics (only in browser)
+export let analytics: ReturnType<typeof getAnalytics> | null = null;
+if (typeof window !== "undefined") {
+  try {
+    analytics = getAnalytics(app);
+  } catch (e) {
+    console.warn("Analytics initialization failed:", e);
+  }
+}
 
 // Seed admin (first user with this email auto-becomes admin)
 export const SEED_ADMIN_EMAIL = "mohanrammurugesan1@gmail.com";

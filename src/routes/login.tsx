@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
@@ -54,10 +54,10 @@ function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <MapPin className="h-6 w-6 text-primary" />
+          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 p-2">
+            <BrandLogo className="h-full w-auto" />
           </div>
-          <CardTitle>Attendance Portal</CardTitle>
+          <CardTitle>TVS Attendance Portal</CardTitle>
           <CardDescription>Sign in with the credentials provided by your admin.</CardDescription>
         </CardHeader>
         <CardContent>
