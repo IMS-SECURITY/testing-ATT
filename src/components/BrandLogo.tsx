@@ -5,7 +5,7 @@ export function BrandLogo({ className, ...props }: HTMLAttributes<HTMLImageEleme
     <img
       src="/tvs-logo.svg"
       alt="TVS Electronics"
-      className={"max-h-12 object-contain " + (className ?? "")}
+      className={"h-12 w-auto " + (className ?? "")}
       {...props}
     />
   );

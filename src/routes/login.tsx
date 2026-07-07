@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BrandLogo } from "@/components/BrandLogo";
 import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -24,12 +25,16 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [coords, setCoords] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
-    if (!loading && user && profile) {
-      navigate({ to: homeFor(profile.role), replace: true });
-    }
-  }, [loading, user, profile, navigate]);
+    const handleMouseMove = (e: MouseEvent) => {
+      setCoords({ x: e.clientX, y: e.clientY });
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,8 +73,13 @@ function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <Card className="w-full max-w-md">
+    <div 
+      className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted p-4 relative overflow-hidden transition-all duration-300"
+      style={{
+        background: `radial-gradient(circle 450px at ${coords.x}px ${coords.y}px, rgba(34, 155, 227, 0.08), var(--background))`
+      }}
+    >
+      <Card className="w-full max-w-md card-entrance card-hover relative z-10">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-16 w-auto max-w-[200px] items-center justify-center p-1">
             <BrandLogo className="h-full w-auto" />
@@ -97,16 +107,31 @@ function LoginPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
-            <Button type="submit" className="w-full" disabled={submitting}>
+            <Button type="submit" className="w-full btn-animated" disabled={submitting}>
               {submitting ? "Signing in…" : "Sign in"}
             </Button>
           </form>
