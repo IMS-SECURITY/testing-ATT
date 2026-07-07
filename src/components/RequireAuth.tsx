@@ -24,8 +24,17 @@ export function RequireAuth({
 
   if (loading || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
-        Loading…
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-background to-muted p-4">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-16 w-auto max-w-[200px] animate-pulse">
+            <img src="/tvs-logo.svg" alt="TVS Electronics" className="h-full w-auto object-contain" />
+          </div>
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <span className="h-2 w-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: '0ms' }} />
+            <span className="h-2 w-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: '150ms' }} />
+            <span className="h-2 w-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: '300ms' }} />
+          </div>
+        </div>
       </div>
     );
   }
