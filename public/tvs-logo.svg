@@ -21,7 +21,6 @@
         fill: #007bc4;
         text-anchor: middle;
         font-style: italic;
-        letter-spacing: 0.5px;
       }
     </style>
   </defs>
@@ -29,10 +28,10 @@
   <ellipse cx="250" cy="120" rx="230" ry="105" class="logo-ellipse" />
   
   <!-- Slanted text to match the italicized TVSE brand font slant -->
-  <g transform="translate(250, 120) skewX(-8) translate(-250, -120)">
+  <g transform="translate(250, 120) skewX(-14) translate(-250, -120)">
     <!-- TVS text -->
-    <text x="246" y="112" font-size="120" class="logo-tvs" letter-spacing="-3px">TVS</text>
+    <text x="250" y="115" font-size="100" class="logo-tvs" letter-spacing="-3px">TVS</text>
     <!-- ELECTRONICS text -->
-    <text x="250" y="162" font-size="28" class="logo-electronics" letter-spacing="1px">ELECTRONICS</text>
+    <text x="250" y="158" font-size="24" class="logo-electronics" letter-spacing="1px">ELECTRONICS</text>
   </g>
 </svg>
