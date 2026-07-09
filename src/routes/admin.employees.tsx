@@ -456,14 +456,14 @@ function EmployeesPage() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{editing ? "Edit employee" : "New employee"}</DialogTitle>
             <DialogDescription>
               Assign one or more projects and pick the office location for each. Coordinates come from the office master data.
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="flex-1 px-1">
+          <ScrollArea className="flex-1 min-h-0 px-1">
             <form onSubmit={save} className="space-y-3 pr-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -561,7 +561,7 @@ function EmployeesPage() {
               </div>
             </form>
           </ScrollArea>
-          <DialogFooter>
+          <DialogFooter className="shrink-0">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={busy} onClick={(e) => { e.preventDefault(); save(e); }}>{busy ? "Saving…" : "Save"}</Button>
           </DialogFooter>

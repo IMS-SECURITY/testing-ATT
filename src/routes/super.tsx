@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { db } from "@/lib/firebase";
 import {
   arrayRemove, arrayUnion, collection, doc, getDocs, query, serverTimestamp, setDoc, updateDoc, where,
@@ -15,6 +16,7 @@ import { createAuthUser } from "@/lib/firebase-admin-create";
 import {
   createOffice, deleteOffice, loadAllOffices, updateOffice, type Office,
 } from "@/lib/offices";
+import { OfficeLocationPicker } from "@/components/OfficeLocationPicker";
 import { toast } from "sonner";
 import { MapPin, Pencil, Plus, Shield, ShieldPlus, Trash2, UserPlus } from "lucide-react";
 
@@ -136,7 +138,9 @@ function SuperPage() {
     setOName("");
     setOLat("");
     setOLng("");
-    setOpenOffice(true);
+    setOpenOffice(false);
+    // small timeout so Leaflet mounts fresh after dialog opens
+    setTimeout(() => setOpenOffice(true), 0);
   };
 
   const openEditOffice = (p: Project, o: Office) => {
@@ -145,7 +149,8 @@ function SuperPage() {
     setOName(o.name);
     setOLat(String(o.lat));
     setOLng(String(o.lng));
-    setOpenOffice(true);
+    setOpenOffice(false);
+    setTimeout(() => setOpenOffice(true), 0);
   };
 
   const saveOffice = async (e: React.FormEvent) => {
@@ -459,31 +464,28 @@ function SuperPage() {
       </Dialog>
 
       <Dialog open={openOffice} onOpenChange={setOpenOffice}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{editOffice ? "Edit office" : "Add office"} — {officeProj?.name}</DialogTitle>
-            <DialogDescription>GPS coordinates are used for the 1 km punch-in radius.</DialogDescription>
+            <DialogDescription>Search or click the map to set GPS coordinates used for the 1 km punch-in radius.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={saveOffice} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Office / location name</Label>
-              <Input value={oName} onChange={(e) => setOName(e.target.value)} placeholder="Bangalore University" required />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+          <ScrollArea className="flex-1 min-h-0">
+            <form id="office-form" onSubmit={saveOffice} className="space-y-4 pr-2">
               <div className="space-y-1.5">
-                <Label>Latitude</Label>
-                <Input value={oLat} onChange={(e) => setOLat(e.target.value)} placeholder="12.9716" required />
+                <Label>Office / location name</Label>
+                <Input value={oName} onChange={(e) => setOName(e.target.value)} placeholder="e.g. Guindy Office, Bangalore HQ" required />
               </div>
-              <div className="space-y-1.5">
-                <Label>Longitude</Label>
-                <Input value={oLng} onChange={(e) => setOLng(e.target.value)} placeholder="77.5946" required />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpenOffice(false)}>Cancel</Button>
-              <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save"}</Button>
-            </DialogFooter>
-          </form>
+              <OfficeLocationPicker
+                lat={parseFloat(oLat) || 0}
+                lng={parseFloat(oLng) || 0}
+                onChange={(lat, lng) => { setOLat(String(lat)); setOLng(String(lng)); }}
+              />
+            </form>
+          </ScrollArea>
+          <DialogFooter className="shrink-0 pt-2">
+            <Button type="button" variant="outline" onClick={() => setOpenOffice(false)}>Cancel</Button>
+            <Button type="submit" form="office-form" disabled={busy}>{busy ? "Saving…" : "Save"}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
