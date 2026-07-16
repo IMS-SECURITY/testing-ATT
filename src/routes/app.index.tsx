@@ -664,6 +664,30 @@ function PunchPage() {
         </TabsContent>
 
         <TabsContent value="leave" className="space-y-4">
+          {/* Leave Balance Stats Cards */}
+          <div className="grid grid-cols-3 gap-3">
+            <Card className="card-hover card-entrance bg-card">
+              <CardContent className="p-3.5 flex flex-col items-center justify-center text-center">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total Leave</p>
+                <p className="text-xl font-bold mt-1 text-foreground">{profile?.totalLeaves ?? 0}</p>
+              </CardContent>
+            </Card>
+            <Card className="card-hover card-entrance bg-card">
+              <CardContent className="p-3.5 flex flex-col items-center justify-center text-center">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Used Leave</p>
+                <p className="text-xl font-bold mt-1 text-destructive">{profile?.usedLeaves ?? 0}</p>
+              </CardContent>
+            </Card>
+            <Card className="card-hover card-entrance fancy-gradient text-white relative overflow-hidden">
+              <CardContent className="p-3.5 flex flex-col items-center justify-center text-center relative z-10">
+                <p className="text-[10px] font-bold opacity-90 uppercase tracking-wider">Leave Balance</p>
+                <p className="text-xl font-bold mt-1">
+                  {Math.max(0, (profile?.totalLeaves ?? 0) - (profile?.usedLeaves ?? 0))}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
           <Card className="card-hover card-entrance">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

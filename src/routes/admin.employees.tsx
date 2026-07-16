@@ -399,9 +399,17 @@ function EmployeesPage() {
                         </div>
                       </td>
                       <td className="p-3 text-xs">
-                        <Badge variant={(r.usedLeaves ?? 0) >= (r.totalLeaves ?? 0) ? "destructive" : "secondary"}>
-                          {r.usedLeaves ?? 0} / {r.totalLeaves ?? 0}
-                        </Badge>
+                        {(() => {
+                          const remaining = (r.totalLeaves ?? 0) - (r.usedLeaves ?? 0);
+                          return (
+                            <span className="flex items-center gap-1.5">
+                              <Badge variant={remaining <= 0 ? "destructive" : remaining <= 3 ? "outline" : "secondary"}>
+                                {remaining} remaining
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">of {r.totalLeaves ?? 0}</span>
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="p-3"><Badge variant={r.role === "admin" || r.role === "superadmin" ? "default" : "secondary"}>{r.role}</Badge></td>
                       <td className="p-3">
