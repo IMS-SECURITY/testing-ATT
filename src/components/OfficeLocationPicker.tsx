@@ -54,8 +54,9 @@ export function OfficeLocationPicker({ lat, lng, onChange }: Props) {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
 
-  const initialLat = lat && !isNaN(lat) ? lat : 20.5937;
-  const initialLng = lng && !isNaN(lng) ? lng : 78.9629; // Default: India center
+  const hasCoords = typeof lat === "number" && lat !== 0 && !isNaN(lat) && typeof lng === "number" && lng !== 0 && !isNaN(lng);
+  const initialLat = 13.08268; // Default: Chennai center
+  const initialLng = 80.27860;
 
   // Initialise map on mount
   useEffect(() => {
@@ -63,6 +64,11 @@ export function OfficeLocationPicker({ lat, lng, onChange }: Props) {
 
     let L: typeof import("leaflet");
     let cancelled = false;
+
+    // Default coordinates to Chennai if none are provided
+    if (!hasCoords) {
+      onChange(initialLat, initialLng);
+    }
 
     import("leaflet").then((mod) => {
       if (cancelled || !containerRef.current || mapRef.current) return;
@@ -83,9 +89,9 @@ export function OfficeLocationPicker({ lat, lng, onChange }: Props) {
         maxZoom: 19,
       }).addTo(map);
 
-      const startLat = lat && !isNaN(lat) ? lat : initialLat;
-      const startLng = lng && !isNaN(lng) ? lng : initialLng;
-      map.setView([startLat, startLng], lat ? 15 : 5);
+      const startLat = hasCoords ? lat : initialLat;
+      const startLng = hasCoords ? lng : initialLng;
+      map.setView([startLat, startLng], 15);
 
       const marker = L.marker([startLat, startLng], { draggable: true }).addTo(map);
       marker.on("dragend", () => {
@@ -134,25 +140,51 @@ export function OfficeLocationPicker({ lat, lng, onChange }: Props) {
       return;
     }
 
-    // 2. Nominatim geocoding
+    // 2. Nominatim geocoding with fallbacks
     setSearching(true);
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(raw)}`,
-        { headers: { "Accept-Language": "en" } },
-      );
-      const data = await res.json();
-      if (!data || data.length === 0) {
-        setSearchError("Location not found. Try a more specific name.");
-        return;
+
+    const queries: string[] = [raw];
+
+    // Comma progressive fallback
+    if (raw.includes(",")) {
+      const parts = raw.split(",").map((p) => p.trim()).filter(Boolean);
+      for (let i = 1; i < parts.length; i++) {
+        queries.push(parts.slice(i).join(", "));
       }
-      const { lat: rlat, lon } = data[0] as { lat: string; lon: string };
-      onChange(parseFloat(parseFloat(rlat).toFixed(6)), parseFloat(parseFloat(lon).toFixed(6)));
-    } catch {
-      setSearchError("Search failed — check your internet connection.");
-    } finally {
-      setSearching(false);
     }
+
+    // Space/words progressive fallback (if search is long)
+    const words = raw.split(/\s+/).filter(Boolean);
+    if (words.length > 3) {
+      queries.push(words.slice(-3).join(" "));
+      queries.push(words.slice(-2).join(" "));
+    }
+
+    // Always append basic city/area fallback if not already tried and search seems Chennai-focused
+    if (!raw.toLowerCase().includes("chennai")) {
+      queries.push("Guindy, Chennai");
+    }
+
+    for (const q of queries) {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`,
+          { headers: { "Accept-Language": "en" } },
+        );
+        const data = await res.json();
+        if (data && data.length > 0) {
+          const { lat: rlat, lon } = data[0] as { lat: string; lon: string };
+          onChange(parseFloat(parseFloat(rlat).toFixed(6)), parseFloat(parseFloat(lon).toFixed(6)));
+          setSearching(false);
+          return;
+        }
+      } catch (err) {
+        // Fall through to next query on fetch/json error
+      }
+    }
+
+    setSearchError("Location not found. Try a more specific city or area name.");
+    setSearching(false);
   }, [searchVal, onChange]);
 
   return (

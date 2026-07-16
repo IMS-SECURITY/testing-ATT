@@ -247,23 +247,28 @@ function AdminDashboard() {
                 <thead className="text-left text-xs uppercase text-muted-foreground">
                   <tr>
                     <th className="p-2">ID</th><th className="p-2">Name</th><th className="p-2">Project</th>
-                    <th className="p-2">Remaining Leaves</th><th className="p-2">Role</th>
+                    <th className="p-2">Leave Balance</th><th className="p-2">Role</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {employees.map((e) => (
+                  {employees.map((e) => {
+                    const remaining = (e.totalLeaves ?? 0) - (e.usedLeaves ?? 0);
+                    return (
                     <tr key={e.id} className="border-t">
                       <td className="p-2 font-mono text-xs">{e.employeeID}</td>
                       <td className="p-2">{e.name}</td>
                       <td className="p-2 text-xs">{e.projectId ?? "—"}</td>
                       <td className="p-2">
-                        <Badge variant={(e.totalLeaves ?? 0) - (e.usedLeaves ?? 0) <= 0 ? "destructive" : "secondary"}>
-                          {(e.totalLeaves ?? 0) - (e.usedLeaves ?? 0)} / {e.totalLeaves ?? 0}
-                        </Badge>
+                        <span className="flex items-center gap-1.5">
+                          <Badge variant={remaining <= 0 ? "destructive" : remaining <= 3 ? "outline" : "secondary"}>
+                            {remaining} remaining
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">of {e.totalLeaves ?? 0}</span>
+                        </span>
                       </td>
                       <td className="p-2"><Badge variant={e.role === "admin" || e.role === "superadmin" ? "default" : "secondary"}>{e.role}</Badge></td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>

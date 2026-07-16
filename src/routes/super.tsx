@@ -469,8 +469,8 @@ function SuperPage() {
             <DialogTitle>{editOffice ? "Edit office" : "Add office"} — {officeProj?.name}</DialogTitle>
             <DialogDescription>Search or click the map to set GPS coordinates used for the 1 km punch-in radius.</DialogDescription>
           </DialogHeader>
-          <ScrollArea className="flex-1 min-h-0">
-            <form id="office-form" onSubmit={saveOffice} className="space-y-4 pr-2">
+          <div className="flex-1 overflow-y-auto min-h-0 pr-2">
+            <form id="office-form" onSubmit={saveOffice} className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Office / location name</Label>
                 <Input value={oName} onChange={(e) => setOName(e.target.value)} placeholder="e.g. Guindy Office, Bangalore HQ" required />
@@ -481,7 +481,7 @@ function SuperPage() {
                 onChange={(lat, lng) => { setOLat(String(lat)); setOLng(String(lng)); }}
               />
             </form>
-          </ScrollArea>
+          </div>
           <DialogFooter className="shrink-0 pt-2">
             <Button type="button" variant="outline" onClick={() => setOpenOffice(false)}>Cancel</Button>
             <Button type="submit" form="office-form" disabled={busy}>{busy ? "Saving…" : "Save"}</Button>

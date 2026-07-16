@@ -463,8 +463,8 @@ function EmployeesPage() {
               Assign one or more projects and pick the office location for each. Coordinates come from the office master data.
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="flex-1 min-h-0 px-1">
-            <form onSubmit={save} className="space-y-3 pr-4">
+          <div className="flex-1 overflow-y-auto min-h-0 px-1 pr-4">
+            <form onSubmit={save} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Employee ID</Label>
@@ -560,7 +560,7 @@ function EmployeesPage() {
                 <Input type="number" min="0" value={form.totalLeaves} onChange={(e) => setForm({ ...form, totalLeaves: e.target.value })} required />
               </div>
             </form>
-          </ScrollArea>
+          </div>
           <DialogFooter className="shrink-0">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={busy} onClick={(e) => { e.preventDefault(); save(e); }}>{busy ? "Saving…" : "Save"}</Button>
