@@ -11,14 +11,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { db } from "@/lib/firebase";
 import {
-  collection, deleteDoc, doc, getDocs, query, serverTimestamp, updateDoc, where,
+  collection, deleteDoc, doc, getDocs, getDoc, query, serverTimestamp, updateDoc, where,
   orderBy, limit, addDoc,
 } from "firebase/firestore";
 import { format, parseISO, addDays, differenceInBusinessDays } from "date-fns";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { ProjectPicker, useAvailableProjects } from "@/components/ProjectPicker";
-import { Check, X, Calendar, Home } from "lucide-react";
+import { Check, X, Calendar, Home, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/admin/requests")({
   component: () => (
@@ -63,6 +63,20 @@ interface WFHRequest {
   createdAt?: any;
 }
 
+interface RegularizationRequest {
+  id: string;
+  uid: string;
+  employeeID: string;
+  name: string;
+  email: string;
+  projectId: string;
+  projectName: string;
+  date: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt?: any;
+}
+
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -77,10 +91,12 @@ function RequestsPage() {
 
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [wfhRequests, setWfhRequests] = useState<WFHRequest[]>([]);
+  const [regularizationRequests, setRegularizationRequests] = useState<RegularizationRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
   const [selectedWfh, setSelectedWfh] = useState<WFHRequest | null>(null);
+  const [selectedRegularization, setSelectedRegularization] = useState<RegularizationRequest | null>(null);
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<"approve" | "reject" | "release">("approve");
   const [busy, setBusy] = useState(false);
@@ -115,6 +131,17 @@ function RequestsPage() {
       );
       const wfhList = wfhSnaps.flatMap((s) => s.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<WFHRequest, "id">) })));
       setWfhRequests(wfhList);
+
+      // Load regularization requests
+      const regSnaps = await Promise.all(
+        isSuper && scopeIds.length === 0
+          ? [getDocs(query(collection(db, "regularizationRequests"), orderBy("createdAt", "desc"), limit(50)))]
+          : chunk(scopeIds, 30).map((ids) =>
+              getDocs(query(collection(db, "regularizationRequests"), where("projectId", "in", ids), orderBy("createdAt", "desc"), limit(50))),
+            ),
+      );
+      const regList = regSnaps.flatMap((s) => s.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<RegularizationRequest, "id">) })));
+      setRegularizationRequests(regList);
     } catch (e) {
       toast.error(
         (e instanceof Error ? e.message : "Failed to load") +
@@ -167,9 +194,9 @@ function RequestsPage() {
       // Update employee's used leaves count
       const daysCount = differenceInBusinessDays(endDate, startDate) + 1;
       const empRef = doc(db, "employees", req.uid);
-      const empSnap = await getDocs(query(collection(db, "employees"), where("uid", "==", req.uid)));
-      if (!empSnap.empty) {
-        const empData = empSnap.docs[0].data();
+      const empSnap = await getDoc(empRef);
+      if (empSnap.exists()) {
+        const empData = empSnap.data();
         const currentUsedLeaves = empData.usedLeaves ?? 0;
         await updateDoc(empRef, {
           usedLeaves: currentUsedLeaves + daysCount,
@@ -304,14 +331,73 @@ function RequestsPage() {
     }
   };
 
+  const approveRegularization = async (req: RegularizationRequest) => {
+    setBusy(true);
+    try {
+      await updateDoc(doc(db, "regularizationRequests", req.id), { status: "approved" });
+      // Create a present attendance record for the missed date
+      await addDoc(collection(db, "attendance"), {
+        uid: req.uid,
+        employeeID: req.employeeID,
+        name: req.name,
+        email: req.email,
+        date: req.date,
+        time: "09:00:00",
+        projectId: req.projectId,
+        projectName: req.projectName,
+        status: "present",
+        regularized: true,
+        regularizationReason: req.reason,
+        lat: 0,
+        lng: 0,
+        createdAt: serverTimestamp(),
+      });
+      toast.success("Regularization approved — attendance record created for " + req.date);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to approve regularization");
+    } finally {
+      setBusy(false);
+      setActionDialogOpen(false);
+      setSelectedRegularization(null);
+    }
+  };
+
+  const rejectRegularization = async (req: RegularizationRequest) => {
+    setBusy(true);
+    try {
+      await updateDoc(doc(db, "regularizationRequests", req.id), { status: "rejected" });
+      toast.success("Regularization rejected — the day will count as absent");
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to reject regularization");
+    } finally {
+      setBusy(false);
+      setActionDialogOpen(false);
+      setSelectedRegularization(null);
+    }
+  };
+
   const handleLeaveAction = (req: LeaveRequest, action: "approve" | "reject" | "release") => {
     setSelectedLeave(req);
+    setSelectedWfh(null);
+    setSelectedRegularization(null);
     setActionType(action);
     setActionDialogOpen(true);
   };
 
   const handleWfhAction = (req: WFHRequest, action: "approve" | "reject" | "release") => {
     setSelectedWfh(req);
+    setSelectedLeave(null);
+    setSelectedRegularization(null);
+    setActionType(action);
+    setActionDialogOpen(true);
+  };
+
+  const handleRegularizationAction = (req: RegularizationRequest, action: "approve" | "reject") => {
+    setSelectedRegularization(req);
+    setSelectedLeave(null);
+    setSelectedWfh(null);
     setActionType(action);
     setActionDialogOpen(true);
   };
@@ -325,6 +411,9 @@ function RequestsPage() {
       if (actionType === "approve") approveWfh(selectedWfh);
       else if (actionType === "reject") rejectWfh(selectedWfh);
       else if (actionType === "release") releaseWfh(selectedWfh);
+    } else if (selectedRegularization) {
+      if (actionType === "approve") approveRegularization(selectedRegularization);
+      else if (actionType === "reject") rejectRegularization(selectedRegularization);
     }
   };
 
@@ -337,6 +426,10 @@ function RequestsPage() {
   const approvedWfh = wfhRequests.filter((r) => r.status === "approved");
   const releasedWfh = wfhRequests.filter((r) => r.status === "released");
   const rejectedWfh = wfhRequests.filter((r) => r.status === "rejected");
+
+  const pendingReg = regularizationRequests.filter((r) => r.status === "pending");
+  const approvedReg = regularizationRequests.filter((r) => r.status === "approved");
+  const rejectedReg = regularizationRequests.filter((r) => r.status === "rejected");
 
   return (
     <div className="space-y-6">
@@ -351,12 +444,15 @@ function RequestsPage() {
       </div>
 
       <Tabs defaultValue="leave" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="leave">
-            Leave Requests {pendingLeaves.length > 0 && <span className="ml-2 rounded-full bg-primary px-2 text-xs text-primary-foreground">{pendingLeaves.length}</span>}
+            Leave {pendingLeaves.length > 0 && <span className="ml-1.5 rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{pendingLeaves.length}</span>}
           </TabsTrigger>
           <TabsTrigger value="wfh">
-            WFH Requests {pendingWfh.length > 0 && <span className="ml-2 rounded-full bg-primary px-2 text-xs text-primary-foreground">{pendingWfh.length}</span>}
+            WFH {pendingWfh.length > 0 && <span className="ml-1.5 rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{pendingWfh.length}</span>}
+          </TabsTrigger>
+          <TabsTrigger value="regularization">
+            Regularize {pendingReg.length > 0 && <span className="ml-1.5 rounded-full bg-destructive px-1.5 text-xs text-destructive-foreground">{pendingReg.length}</span>}
           </TabsTrigger>
         </TabsList>
 
@@ -515,6 +611,84 @@ function RequestsPage() {
                             </Button>
                           ) : null}
                         </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="regularization" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RefreshCw className="h-4 w-4" /> Regularization Requests
+              </CardTitle>
+              <CardDescription>
+                {pendingReg.length} pending, {approvedReg.length} approved, {rejectedReg.length} rejected.
+                Approved requests create a "Present" record. Rejected requests keep the day as absent (deducts leave).
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : regularizationRequests.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No regularization requests yet.</p>
+              ) : (
+                <div className="divide-y rounded-md border">
+                  {regularizationRequests.map((r) => (
+                    <div key={r.id} className="space-y-2 px-3 py-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="font-medium">{r.name} ({r.employeeID})</p>
+                          <p className="text-xs text-muted-foreground">{r.email}</p>
+                        </div>
+                        <div className="flex gap-1">
+                          <Badge variant="secondary">{r.projectName ?? r.projectId}</Badge>
+                          <Badge
+                            variant={
+                              r.status === "approved"
+                                ? "default"
+                                : r.status === "rejected"
+                                ? "destructive"
+                                : "secondary"
+                            }
+                          >
+                            {r.status}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <Badge variant="outline">📅 {r.date}</Badge>
+                        <span className="text-xs text-muted-foreground">Missed punch regularization</span>
+                      </div>
+                      <p className="text-sm"><span className="font-medium">Reason:</span> {r.reason}</p>
+                      {isAdmin && r.status === "pending" && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            onClick={() => handleRegularizationAction(r, "approve")}
+                            disabled={busy}
+                          >
+                            <Check className="mr-1 h-4 w-4" /> Mark Present
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleRegularizationAction(r, "reject")}
+                            disabled={busy}
+                          >
+                            <X className="mr-1 h-4 w-4" /> Reject (Deduct Leave)
+                          </Button>
+                        </div>
+                      )}
+                      {r.status === "approved" && (
+                        <p className="text-xs text-green-600 dark:text-green-400 font-medium">✓ Marked as Present — attendance record created</p>
+                      )}
+                      {r.status === "rejected" && (
+                        <p className="text-xs text-destructive font-medium">✗ Rejected — counted as absent</p>
                       )}
                     </div>
                   ))}

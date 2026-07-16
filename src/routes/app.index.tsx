@@ -11,7 +11,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Clock, Loader2, LogOut, Calendar, Home } from "lucide-react";
+import { MapPin, Clock, Loader2, LogOut, Calendar, Home, RefreshCw } from "lucide-react";
 import { db } from "@/lib/firebase";
 import {
   addDoc,
@@ -88,6 +88,20 @@ interface WFHRequest {
   createdAt: Timestamp;
 }
 
+interface RegularizationRequest {
+  id: string;
+  uid: string;
+  employeeID: string;
+  name: string;
+  email: string;
+  projectId: string;
+  projectName: string;
+  date: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: Timestamp;
+}
+
 const CONFIRM_PHRASE = "punch out";
 
 function PunchPage() {
@@ -119,6 +133,14 @@ function PunchPage() {
   const [wfhRequests, setWfhRequests] = useState<WFHRequest[]>([]);
   const [loadingWfh, setLoadingWfh] = useState(true);
 
+  // Regularization request state
+  const [regDate, setRegDate] = useState("");
+  const [regReason, setRegReason] = useState("");
+  const [regProjectId, setRegProjectId] = useState("");
+  const [regBusy, setRegBusy] = useState(false);
+  const [regRequests, setRegRequests] = useState<RegularizationRequest[]>([]);
+  const [loadingReg, setLoadingReg] = useState(true);
+
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   useEffect(() => {
@@ -127,6 +149,7 @@ function PunchPage() {
     // Set default for leave and WFH forms
     if (assignments.length === 1 && !leaveProjectId) setLeaveProjectId(assignments[0].projectId);
     if (assignments.length === 1 && !wfhProjectId) setWfhProjectId(assignments[0].projectId);
+    if (assignments.length === 1 && !regProjectId) setRegProjectId(assignments[0].projectId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignments.map((a) => a.projectId).join("|")]);
 
@@ -220,6 +243,7 @@ function PunchPage() {
     loadHistory();
     loadLeaveRequests();
     loadWfhRequests();
+    loadRegularizationRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -260,6 +284,25 @@ function PunchPage() {
       toast.error(`Failed to load WFH requests: ${e instanceof Error ? e.message : "Unknown error"}`);
     } finally {
       setLoadingWfh(false);
+    }
+  };
+
+  const loadRegularizationRequests = async () => {
+    if (!user) return;
+    setLoadingReg(true);
+    try {
+      const q = query(
+        collection(db, "regularizationRequests"),
+        where("uid", "==", user.uid),
+        orderBy("createdAt", "desc"),
+        limit(20),
+      );
+      const snap = await getDocs(q);
+      setRegRequests(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<RegularizationRequest, "id">) })));
+    } catch (e) {
+      console.error("Load regularization error:", e);
+    } finally {
+      setLoadingReg(false);
     }
   };
 
@@ -473,6 +516,58 @@ function PunchPage() {
     }
   };
 
+  const onSubmitRegularization = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile || !user) return;
+    if (!regProjectId) {
+      toast.error("Please select a project.");
+      return;
+    }
+    if (!regDate) {
+      toast.error("Please select the date you missed.");
+      return;
+    }
+    if (regDate >= todayStr) {
+      toast.error("Regularization date must be in the past.");
+      return;
+    }
+    if (!regReason.trim()) {
+      toast.error("Please provide a reason for the missed punch.");
+      return;
+    }
+    // Check if already submitted for this date
+    const alreadyExists = regRequests.some((r) => r.date === regDate && r.projectId === regProjectId);
+    if (alreadyExists) {
+      toast.error("You have already submitted a regularization request for this date and project.");
+      return;
+    }
+    setRegBusy(true);
+    try {
+      const assignment = assignments.find((a) => a.projectId === regProjectId);
+      await addDoc(collection(db, "regularizationRequests"), {
+        uid: user.uid,
+        employeeID: profile.employeeID,
+        name: profile.name,
+        email: profile.email,
+        projectId: regProjectId,
+        projectName: assignment?.projectName ?? regProjectId,
+        date: regDate,
+        reason: regReason.trim(),
+        status: "pending",
+        createdAt: serverTimestamp(),
+      });
+      toast.success("Regularization request submitted. Your manager will review it.");
+      setRegDate("");
+      setRegReason("");
+      await loadRegularizationRequests();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to submit regularization request";
+      toast.error(msg);
+    } finally {
+      setRegBusy(false);
+    }
+  };
+
   const hasPunchedIn = !!todayPresent;
   const hasPunchedOut = !!todayPresent?.punchOutTime;
 
@@ -484,10 +579,18 @@ function PunchPage() {
       </div>
 
       <Tabs defaultValue="attendance" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
           <TabsTrigger value="leave">Leave</TabsTrigger>
           <TabsTrigger value="wfh">WFH</TabsTrigger>
+          <TabsTrigger value="regularize" className="relative">
+            Regularize
+            {regRequests.filter((r) => r.status === "approved" || r.status === "rejected").length > 0 && (
+              <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] text-destructive-foreground">
+                {regRequests.filter((r) => r.status === "approved" || r.status === "rejected").length}
+              </span>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="attendance" className="space-y-4">
@@ -903,6 +1006,119 @@ function PunchPage() {
                       </div>
                       <p className="text-xs text-muted-foreground">{r.projectName ?? r.projectId}</p>
                       <p className="text-xs">{r.reason}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="regularize" className="space-y-4">
+          <Card className="card-hover card-entrance">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RefreshCw className="h-4 w-4" /> Request Regularization
+              </CardTitle>
+              <CardDescription>
+                Forgot to punch in/out? Submit a regularization request for that day.
+                If your manager approves, the day will be marked as Present. If rejected, it stays absent.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={onSubmitRegularization} className="space-y-4">
+                {assignments.length > 1 && (
+                  <div className="space-y-1.5">
+                    <Label>Project</Label>
+                    <select
+                      className="h-10 w-full rounded-md border bg-background px-2 text-sm"
+                      value={regProjectId}
+                      onChange={(e) => setRegProjectId(e.target.value)}
+                      disabled={regBusy}
+                      required
+                    >
+                      <option value="">Select…</option>
+                      {assignments.map((a) => (
+                        <option key={a.projectId} value={a.projectId}>
+                          {a.projectName ?? a.projectId} ({a.projectId})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <Label>Date of missed punch</Label>
+                  <Input
+                    type="date"
+                    value={regDate}
+                    onChange={(e) => setRegDate(e.target.value)}
+                    disabled={regBusy}
+                    max={new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split("T")[0]}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Reason</Label>
+                  <Input
+                    value={regReason}
+                    onChange={(e) => setRegReason(e.target.value)}
+                    disabled={regBusy}
+                    placeholder="Why did you miss the punch?"
+                    required
+                  />
+                </div>
+                <Button type="submit" disabled={regBusy} className="w-full">
+                  {regBusy ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting…</>
+                  ) : (
+                    "Submit Regularization Request"
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card className="card-hover card-entrance">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-4 w-4" /> My Regularization Requests
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingReg ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : regRequests.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No regularization requests yet.</p>
+              ) : (
+                <div className="divide-y rounded-md border">
+                  {regRequests.map((r) => (
+                    <div key={r.id} className="space-y-1 px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge variant="secondary">📅 {r.date}</Badge>
+                        <Badge
+                          variant={
+                            r.status === "approved"
+                              ? "default"
+                              : r.status === "rejected"
+                              ? "destructive"
+                              : "secondary"
+                          }
+                        >
+                          {r.status}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{r.projectName ?? r.projectId}</p>
+                      <p className="text-xs">{r.reason}</p>
+                      {r.status === "approved" && (
+                        <p className="text-xs text-green-600 dark:text-green-400 font-medium">
+                          ✓ Your manager approved — the day has been marked as Present.
+                        </p>
+                      )}
+                      {r.status === "rejected" && (
+                        <p className="text-xs text-destructive font-medium">
+                          ✗ Your manager rejected the request — the day counts as absent.
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>

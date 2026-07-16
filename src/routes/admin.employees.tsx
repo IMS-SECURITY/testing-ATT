@@ -22,7 +22,7 @@ import { createAuthUser } from "@/lib/firebase-admin-create";
 import { useAuth } from "@/lib/auth-context";
 import type { Assignment } from "@/lib/auth-context";
 import { toast } from "sonner";
-import { KeyRound, Pencil, Plus, Trash2, X } from "lucide-react";
+import { KeyRound, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { ProjectPicker, useAvailableProjects } from "@/components/ProjectPicker";
@@ -563,9 +563,31 @@ function EmployeesPage() {
                 );})}
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Total leaves</Label>
-                <Input type="number" min="0" value={form.totalLeaves} onChange={(e) => setForm({ ...form, totalLeaves: e.target.value })} required />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Total leaves</Label>
+                  <Input type="number" min="0" value={form.totalLeaves} onChange={(e) => setForm({ ...form, totalLeaves: e.target.value })} required />
+                </div>
+                {editing && (
+                  <div className="space-y-1.5">
+                    <Label>Used leaves <span className="text-xs text-muted-foreground">(admin override)</span></Label>
+                    <div className="flex gap-1.5">
+                      <Input type="number" min="0" value={form.usedLeaves} onChange={(e) => setForm({ ...form, usedLeaves: e.target.value })} required className="flex-1" />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        title="Reset used leaves to 0 (new cycle)"
+                        onClick={() => setForm({ ...form, usedLeaves: "0" })}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Remaining: <strong>{Math.max(0, parseInt(form.totalLeaves || "0") - parseInt(form.usedLeaves || "0"))}</strong> of {form.totalLeaves}
+                    </p>
+                  </div>
+                )}
               </div>
             </form>
           </div>
