@@ -192,7 +192,7 @@ function RequestsPage() {
       }
 
       // Update employee's used leaves count
-      const daysCount = differenceInBusinessDays(endDate, startDate) + 1;
+      const daysCount = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
       const empRef = doc(db, "employees", req.uid);
       const empSnap = await getDoc(empRef);
       if (empSnap.exists()) {

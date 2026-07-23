@@ -108,6 +108,26 @@ function AttendancePage() {
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [activeProjectId, isSuper, adminProjectIds.join("|")]);
 
+  const statusPriority = (status?: string) => {
+    if (status === "present") return 4;
+    if (status === "wfh") return 3;
+    if (status === "leave") return 2;
+    if (status === "on_duty") return 1;
+    return 0;
+  };
+
+  const dedupeRowsByDay = (list: Row[]) => {
+    const byDayAndEmp = new Map<string, Row>();
+    list.forEach((r) => {
+      const key = `${r.uid}_${r.date}`;
+      const existing = byDayAndEmp.get(key);
+      if (!existing || statusPriority(r.status) > statusPriority(existing.status)) {
+        byDayAndEmp.set(key, r);
+      }
+    });
+    return Array.from(byDayAndEmp.values()).sort((a, b) => b.date.localeCompare(a.date));
+  };
+
   const filtered = useMemo(() => {
     const a = new Date(anchor + "T00:00:00");
     let from = "", to = "";
@@ -119,26 +139,128 @@ function AttendancePage() {
       from = format(startOfMonth(a), "yyyy-MM-dd");
       to = format(endOfMonth(a), "yyyy-MM-dd");
     }
-    return rows.filter((r) => {
+    const filteredRows = rows.filter((r) => {
       if (range !== "all" && (r.date < from || r.date > to)) return false;
       if (empFilter && !r.name?.toLowerCase().includes(empFilter.toLowerCase()) && !r.employeeID?.toLowerCase().includes(empFilter.toLowerCase())) return false;
       return true;
     });
+    return dedupeRowsByDay(filteredRows);
   }, [rows, range, anchor, empFilter]);
 
-  const toExportRows = (list: Row[]) => list.map((r) => ({
-    EmployeeID: r.employeeID, Name: r.name, Email: r.email,
-    Project: r.projectId ?? "",
-    Date: r.date, "Punch In": r.time, "Punch Out": r.punchOutTime ?? "",
-    "In Latitude": r.lat, "In Longitude": r.lng,
-    "Out Latitude": r.punchOutLat ?? "", "Out Longitude": r.punchOutLng ?? "",
-  }));
+  const toExportRows = (list: Row[]) => list.map((r) => {
+    let officeLocation = "Field / Unknown";
+    if (r.status === "on_duty") {
+      officeLocation = r.onDutyAtName || "On Duty";
+    } else if (r.status === "wfh") {
+      officeLocation = "Work From Home";
+    } else if (r.status === "leave") {
+      officeLocation = "On Leave";
+    } else if (r.officeName) {
+      officeLocation = r.officeName;
+    } else if (r.lat && r.lng) {
+      officeLocation = `${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}`;
+    }
+    return {
+      EmployeeID: r.employeeID, Name: r.name, Email: r.email,
+      Project: r.projectId ?? "",
+      Date: r.date, "Punch In": r.time, "Punch Out": r.punchOutTime ?? "",
+      "Office Location": officeLocation,
+    };
+  });
 
   const exportXlsx = () => {
     const ws = XLSX.utils.json_to_sheet(toExportRows(filtered));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Attendance");
     XLSX.writeFile(wb, `attendance-${range}-${anchor}.xlsx`);
+  };
+
+  const exportMonthlyReport = async () => {
+    toast.info("Generating monthly report sheet-by-sheet, please wait...");
+    try {
+      // 1. Fetch all employees
+      const empSnap = await getDocs(collection(db, "employees"));
+      const emps = empSnap.docs.map((d) => ({
+        id: d.id,
+        employeeID: d.data().employeeID || "",
+        name: d.data().name || "",
+        email: d.data().email || "",
+        role: d.data().role || "",
+        projectId: d.data().projectId || ""
+      })).filter((e) => e.role === "employee");
+
+      // Get dates of the month based on anchor
+      const refDate = new Date(anchor + "T00:00:00");
+      const start = startOfMonth(refDate);
+      const end = endOfMonth(refDate);
+      const dates: string[] = [];
+      let cur = start;
+      while (cur <= end) {
+        dates.push(format(cur, "yyyy-MM-dd"));
+        cur = new Date(cur.getTime() + 24 * 60 * 60 * 1000);
+      }
+
+      // Map rows by employee id and date
+      const attendanceMap = new Map<string, Row>();
+      rows.forEach((r) => {
+        const key = `${r.uid}_${r.date}`;
+        const existing = attendanceMap.get(key);
+        if (!existing || statusPriority(r.status) > statusPriority(existing.status)) {
+          attendanceMap.set(key, r);
+        }
+      });
+
+      const wb = XLSX.utils.book_new();
+
+      dates.forEach((dateStr) => {
+        const sheetData = emps.map((e) => {
+          const record = attendanceMap.get(`${e.id}_${dateStr}`);
+          let statusText = "Absent";
+          let punchIn = "";
+          let punchOut = "";
+          let location = "";
+
+          if (record) {
+            punchIn = record.time || "";
+            punchOut = record.punchOutTime || "";
+            if (record.status === "present") {
+              statusText = "Present";
+              location = record.officeName || "";
+            } else if (record.status === "wfh") {
+              statusText = "WFH";
+              location = "Work From Home";
+            } else if (record.status === "leave") {
+              statusText = "Leave";
+              location = record.leaveReason || "On Leave";
+            } else if (record.status === "on_duty") {
+              statusText = "On Duty";
+              location = record.onDutyAtName || "On Duty";
+            }
+          }
+
+          return {
+            "Employee ID": e.employeeID,
+            Name: e.name,
+            Email: e.email,
+            Project: e.projectId,
+            Status: statusText,
+            "Punch In": punchIn,
+            "Punch Out": punchOut,
+            Location: location
+          };
+        });
+
+        // Sheet names can be max 31 chars. Date formats "YYYY-MM-DD" is 10 chars.
+        const ws = XLSX.utils.json_to_sheet(sheetData);
+        XLSX.utils.book_append_sheet(wb, ws, dateStr);
+      });
+
+      XLSX.writeFile(wb, `attendance-monthly-report-${format(refDate, "yyyy-MM")}.xlsx`);
+      toast.success("Monthly report exported successfully!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate monthly report");
+    }
   };
 
   const exportCsv = () => {
@@ -185,6 +307,11 @@ function AttendancePage() {
           <ProjectPicker projects={projects} value={activeProjectId} onChange={setActiveProjectId} />
           <Button variant="outline" size="sm" onClick={exportCsv}><Download className="mr-1 h-4 w-4" /> CSV</Button>
           <Button variant="outline" size="sm" onClick={exportXlsx}><Download className="mr-1 h-4 w-4" /> Excel</Button>
+          {range === "month" && (
+            <Button variant="outline" size="sm" onClick={exportMonthlyReport} className="bg-emerald-500 hover:bg-emerald-600 text-white hover:text-white border-none">
+              <Download className="mr-1 h-4 w-4" /> Monthly Report Excel
+            </Button>
+          )}
           {isAdmin && <Button variant="secondary" size="sm" onClick={exportProjectWiseXlsx}><Download className="mr-1 h-4 w-4" /> Project-wise Excel</Button>}
           {isAdmin && <Button size="sm" onClick={() => setNewOpen(true)}><Plus className="mr-1 h-4 w-4" /> Add entry</Button>}
         </div>

@@ -351,6 +351,7 @@ function PunchPage() {
         lng: longitude,
         distanceKm: dist,
         status: "present",
+        officeName: selectedAssignment.projectName ?? selectedAssignment.projectId,
         createdAt: serverTimestamp(),
       });
       // Create On Duty stub for other assigned projects so other admins don't see them as absent.
@@ -366,6 +367,7 @@ function PunchPage() {
             status: "on_duty",
             onDutyAt: selectedAssignment.projectId,
             onDutyAtName: selectedAssignment.projectName ?? selectedAssignment.projectId,
+            officeName: selectedAssignment.projectName ?? selectedAssignment.projectId,
             createdAt: serverTimestamp(),
           }),
         ),
@@ -738,28 +740,50 @@ function PunchPage() {
                 <p className="text-sm text-muted-foreground">No past attendance yet.</p>
               ) : (
                 <div className="divide-y rounded-md border">
-                  {history.map((r) => (
-                    <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{r.date}</Badge>
-                        <span className="text-xs text-muted-foreground">{r.projectName ?? r.projectId ?? "—"}</span>
+                  {(() => {
+                    const statusPriority = (status?: string) => {
+                      if (status === "present") return 4;
+                      if (status === "wfh") return 3;
+                      if (status === "leave") return 2;
+                      if (status === "on_duty") return 1;
+                      return 0;
+                    };
+                    const deduped: TodayRecord[] = [];
+                    const byDate = new Map<string, TodayRecord>();
+                    history.forEach((r) => {
+                      const existing = byDate.get(r.date);
+                      if (!existing || statusPriority(r.status) > statusPriority(existing.status)) {
+                        byDate.set(r.date, r);
+                      }
+                    });
+                    const sorted = Array.from(byDate.values()).sort((a, b) => b.date.localeCompare(a.date));
+                    return sorted.map((r) => (
+                      <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">{r.date}</Badge>
+                          <span className="text-xs text-muted-foreground">{r.projectName ?? r.projectId ?? "—"}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {r.status === "on_duty" ? (
+                            <Badge className="bg-amber-500 hover:bg-amber-500">On Duty</Badge>
+                          ) : r.status === "wfh" ? (
+                            <Badge className="bg-blue-500 hover:bg-blue-500">WFH</Badge>
+                          ) : r.status === "leave" ? (
+                            <Badge variant="destructive">Leave</Badge>
+                          ) : (
+                            <>
+                              <Badge>In: {r.time}</Badge>
+                              {r.punchOutTime ? (
+                                <Badge variant="outline">Out: {r.punchOutTime}</Badge>
+                              ) : (
+                                <Badge variant="destructive">No punch-out</Badge>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {r.status === "on_duty" ? (
-                          <Badge className="bg-amber-500 hover:bg-amber-500">On Duty</Badge>
-                        ) : (
-                          <>
-                            <Badge>In: {r.time}</Badge>
-                            {r.punchOutTime ? (
-                              <Badge variant="outline">Out: {r.punchOutTime}</Badge>
-                            ) : (
-                              <Badge variant="destructive">No punch-out</Badge>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    ));
+                  })()}
                 </div>
               )}
             </CardContent>

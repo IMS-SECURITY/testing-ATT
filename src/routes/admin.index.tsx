@@ -114,26 +114,21 @@ function AdminDashboard() {
   );
 
   const reconcileLeaves = async () => {
-    const days: string[] = [];
-    for (let i = 1; i <= 30; i++) {
-      const d = subDays(new Date(), i);
-      const dow = getDay(d);
-      if (dow === 0 || dow === 6) continue;
-      days.push(format(d, "yyyy-MM-dd"));
-    }
-    const presentMap = new Map<string, Set<string>>();
+    // Group attendance records of status "leave" by employee uid
+    const leaveCountMap = new Map<string, number>();
     allAttendance.forEach((a) => {
-      const s = presentMap.get(a.uid) ?? new Set<string>();
-      s.add(a.date);
-      presentMap.set(a.uid, s);
+      if (a.status === "leave") {
+        const currentCount = leaveCountMap.get(a.uid) ?? 0;
+        leaveCountMap.set(a.uid, currentCount + 1);
+      }
     });
+
     let updated = 0;
     for (const emp of workforce) {
-      const present = presentMap.get(emp.id) ?? new Set<string>();
-      const absent = days.filter((d) => !present.has(d)).length;
-      if ((emp.usedLeaves ?? -1) !== absent) {
+      const leavesTaken = leaveCountMap.get(emp.id) ?? 0;
+      if ((emp.usedLeaves ?? -1) !== leavesTaken) {
         try {
-          await updateDoc(doc(db, "employees", emp.id), { usedLeaves: absent });
+          await updateDoc(doc(db, "employees", emp.id), { usedLeaves: leavesTaken });
           updated++;
         } catch (e) { console.error(e); }
       }
@@ -141,9 +136,8 @@ function AdminDashboard() {
     toast.success(`Reconciled leaves for ${updated} employees`);
     setEmployees((prev) => prev.map((e) => {
       if (e.role !== "employee") return e;
-      const present = presentMap.get(e.id) ?? new Set<string>();
-      const absent = days.filter((d) => !present.has(d)).length;
-      return { ...e, usedLeaves: absent };
+      const leavesTaken = leaveCountMap.get(e.id) ?? 0;
+      return { ...e, usedLeaves: leavesTaken };
     }));
   };
 
