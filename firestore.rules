@@ -122,6 +122,11 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    match /holidays/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
     match /meta/{id} {
       allow read: if isSuperAdmin() || isAdmin();
       allow write: if isSuperAdmin() || isAdmin();

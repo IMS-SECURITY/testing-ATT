@@ -18,7 +18,12 @@ import {
 } from "@/lib/offices";
 import { OfficeLocationPicker } from "@/components/OfficeLocationPicker";
 import { toast } from "sonner";
-import { MapPin, Pencil, Plus, Shield, ShieldPlus, Trash2, UserPlus } from "lucide-react";
+import { MapPin, Pencil, Plus, Shield, ShieldPlus, Trash2, UserPlus, CalendarDays } from "lucide-react";
+import { CalendarView, MonthNavigator, HolidayTypeBadge } from "@/components/CalendarView";
+import {
+  loadHolidaysForYear, upsertHoliday, deleteHoliday, type Holiday,
+} from "@/lib/holidays";
+import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/super")({
   component: () => (
@@ -39,6 +44,7 @@ interface AdminRow {
 }
 
 function SuperPage() {
+  const { profile } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [offices, setOffices] = useState<Office[]>([]);
   const [admins, setAdmins] = useState<AdminRow[]>([]);
@@ -71,6 +77,18 @@ function SuperPage() {
   const [sEmail, setSEmail] = useState("");
   const [sPass, setSPass] = useState("");
 
+  // ── Holiday management state ────────────────────────────────────────
+  const nowDate = new Date();
+  const [calYear, setCalYear] = useState(nowDate.getFullYear());
+  const [calMonth, setCalMonth] = useState(nowDate.getMonth() + 1);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [loadingHolidays, setLoadingHolidays] = useState(true);
+  const [openHoliday, setOpenHoliday] = useState(false);
+  const [hDate, setHDate] = useState("");
+  const [hName, setHName] = useState("");
+  const [hType, setHType] = useState<Holiday["type"]>("national");
+  const [holidayBusy, setHolidayBusy] = useState(false);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -92,6 +110,20 @@ function SuperPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Load holidays for the displayed year
+  useEffect(() => {
+    setLoadingHolidays(true);
+    loadHolidaysForYear(calYear)
+      .then(setHolidays)
+      .catch(() => toast.error("Failed to load holidays"))
+      .finally(() => setLoadingHolidays(false));
+  }, [calYear]);
+
+  const reloadHolidays = async () => {
+    const list = await loadHolidaysForYear(calYear);
+    setHolidays(list);
+  };
 
   const officesOf = (projectId: string) => offices.filter((o) => o.projectId === projectId);
 
@@ -297,6 +329,51 @@ function SuperPage() {
     }
   };
 
+  // ── Holiday handlers ───────────────────────────────────────────────
+  const openAddHoliday = (dateStr?: string) => {
+    setHDate(dateStr ?? "");
+    setHName("");
+    setHType("national");
+    setOpenHoliday(true);
+  };
+
+  const openEditHoliday = (h: Holiday) => {
+    setHDate(h.date);
+    setHName(h.name);
+    setHType(h.type);
+    setOpenHoliday(true);
+  };
+
+  const saveHoliday = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!hDate || !hName.trim()) return toast.error("Date and name required");
+    setHolidayBusy(true);
+    try {
+      await upsertHoliday(
+        { date: hDate, name: hName.trim(), type: hType },
+        profile?.name ?? "Super Admin",
+      );
+      toast.success("Holiday saved");
+      setOpenHoliday(false);
+      await reloadHolidays();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save holiday");
+    } finally {
+      setHolidayBusy(false);
+    }
+  };
+
+  const removeHoliday = async (h: Holiday) => {
+    if (!confirm(`Remove holiday "${h.name}" on ${h.date}?`)) return;
+    try {
+      await deleteHoliday(h.date);
+      toast.success("Holiday removed");
+      await reloadHolidays();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -427,6 +504,92 @@ function SuperPage() {
         </CardContent>
       </Card>
 
+      {/* ── HOLIDAY MANAGEMENT ────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-primary" /> Academic Calendar & Holidays
+              </CardTitle>
+              <CardDescription>Mark holidays for all employees. Click a day or use the button to add a holiday.</CardDescription>
+            </div>
+            <Button size="sm" onClick={() => openAddHoliday()}>
+              <Plus className="mr-1 h-3 w-3" /> Add Holiday
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <MonthNavigator
+            year={calYear}
+            month={calMonth}
+            onChange={(y, m) => {
+              setCalMonth(m);
+              if (y !== calYear) setCalYear(y);
+            }}
+          />
+          {loadingHolidays ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+          ) : (
+            <CalendarView
+              year={calYear}
+              month={calMonth}
+              holidays={holidays}
+              readOnly={false}
+              onDayClick={(dateStr) => {
+                // If already a holiday, open edit; otherwise open add
+                const existing = holidays.find((h) => h.date === dateStr);
+                if (existing) openEditHoliday(existing);
+                else openAddHoliday(dateStr);
+              }}
+            />
+          )}
+
+          {/* Holiday list for the selected month */}
+          {(() => {
+            const monthStr = `${calYear}-${String(calMonth).padStart(2, "0")}`;
+            const monthHols = holidays.filter((h) => h.date.startsWith(monthStr));
+            if (monthHols.length === 0) return null;
+            return (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">Holidays this month</p>
+                <div className="divide-y rounded-md border">
+                  {monthHols.map((h) => (
+                    <div key={h.date} className="flex items-center justify-between px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium">{h.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(h.date + "T00:00:00").toLocaleDateString("en-IN", {
+                            weekday: "short", day: "numeric", month: "short",
+                          })}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <HolidayTypeBadge type={h.type} />
+                        <button
+                          className="rounded p-1 hover:bg-muted"
+                          onClick={() => openEditHoliday(h)}
+                          title="Edit"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                        <button
+                          className="rounded p-1 text-destructive hover:bg-destructive/10"
+                          onClick={() => removeHoliday(h)}
+                          title="Delete"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+        </CardContent>
+      </Card>
+
       <Dialog open={openProj} onOpenChange={setOpenProj}>
         <DialogContent>
           <DialogHeader><DialogTitle>New project</DialogTitle></DialogHeader>
@@ -524,6 +687,57 @@ function SuperPage() {
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpenSuper(false)}>Cancel</Button>
               <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Create Super Admin"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Add/Edit Holiday Dialog ──────────────────────────────── */}
+      <Dialog open={openHoliday} onOpenChange={setOpenHoliday}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{holidays.find((h) => h.date === hDate) ? "Edit Holiday" : "Add Holiday"}</DialogTitle>
+            <DialogDescription>Set the date, name, and type of the holiday.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={saveHoliday} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="hDate">Date</Label>
+              <Input
+                id="hDate"
+                type="date"
+                value={hDate}
+                onChange={(e) => setHDate(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="hName">Holiday Name</Label>
+              <Input
+                id="hName"
+                placeholder="e.g. Independence Day, Deepavali"
+                value={hName}
+                onChange={(e) => setHName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="hType">Holiday Type</Label>
+              <select
+                id="hType"
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                value={hType}
+                onChange={(e) => setHType(e.target.value as Holiday["type"])}
+              >
+                <option value="national">🔴 National / Gazetted Holiday</option>
+                <option value="office">🟡 Office / Custom Holiday</option>
+                <option value="optional">🔵 Optional Holiday</option>
+              </select>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpenHoliday(false)}>Cancel</Button>
+              <Button type="submit" disabled={holidayBusy}>
+                {holidayBusy ? "Saving…" : "Save Holiday"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

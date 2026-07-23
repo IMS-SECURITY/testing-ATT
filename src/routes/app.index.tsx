@@ -29,6 +29,8 @@ import {
 import { distanceKm, getCurrentPosition } from "@/lib/geo";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { CalendarView, MonthNavigator, HolidayTypeBadge } from "@/components/CalendarView";
+import { loadHolidaysForYear, type Holiday } from "@/lib/holidays";
 
 export const Route = createFileRoute("/app/")({
   component: () => (
@@ -141,6 +143,13 @@ function PunchPage() {
   const [regRequests, setRegRequests] = useState<RegularizationRequest[]>([]);
   const [loadingReg, setLoadingReg] = useState(true);
 
+  // Calendar state
+  const now = new Date();
+  const [calYear, setCalYear] = useState(now.getFullYear());
+  const [calMonth, setCalMonth] = useState(now.getMonth() + 1);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [loadingHolidays, setLoadingHolidays] = useState(true);
+
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   useEffect(() => {
@@ -151,7 +160,16 @@ function PunchPage() {
     if (assignments.length === 1 && !wfhProjectId) setWfhProjectId(assignments[0].projectId);
     if (assignments.length === 1 && !regProjectId) setRegProjectId(assignments[0].projectId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assignments.map((a) => a.projectId).join("|")]);
+  }, [assignments.map((a) => a.projectId).join("|")]);  
+
+  // Load holidays whenever year changes
+  useEffect(() => {
+    setLoadingHolidays(true);
+    loadHolidaysForYear(calYear)
+      .then(setHolidays)
+      .catch(() => toast.error("Failed to load holiday calendar"))
+      .finally(() => setLoadingHolidays(false));
+  }, [calYear]);
 
   const selectedAssignment = useMemo(
     () => assignments.find((a) => a.projectId === selectedProjectId) ?? null,
@@ -581,7 +599,7 @@ function PunchPage() {
       </div>
 
       <Tabs defaultValue="attendance" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
           <TabsTrigger value="leave">Leave</TabsTrigger>
           <TabsTrigger value="wfh">WFH</TabsTrigger>
@@ -592,6 +610,9 @@ function PunchPage() {
                 {regRequests.filter((r) => r.status === "approved" || r.status === "rejected").length}
               </span>
             )}
+          </TabsTrigger>
+          <TabsTrigger value="calendar" className="flex items-center gap-1">
+            <Calendar className="h-3.5 w-3.5" /> Calendar
           </TabsTrigger>
         </TabsList>
 
@@ -1147,6 +1168,75 @@ function PunchPage() {
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── CALENDAR TAB ─────────────────────────────────────────── */}
+        <TabsContent value="calendar" className="space-y-4">
+          <Card className="card-hover card-entrance">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" /> Academic Calendar
+              </CardTitle>
+              <CardDescription>
+                Office working days and public holidays. Managed by the super admin.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MonthNavigator
+                year={calYear}
+                month={calMonth}
+                onChange={(y, m) => {
+                  setCalMonth(m);
+                  if (y !== calYear) setCalYear(y);
+                }}
+              />
+              {loadingHolidays ? (
+                <div className="flex items-center justify-center py-12 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading calendar…
+                </div>
+              ) : (
+                <CalendarView
+                  year={calYear}
+                  month={calMonth}
+                  holidays={holidays}
+                  readOnly
+                />
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Holiday list for the displayed month */}
+          <Card className="card-hover card-entrance">
+            <CardHeader>
+              <CardTitle className="text-sm">Holidays this month</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const monthStr = `${calYear}-${String(calMonth).padStart(2, "0")}`;
+                const monthHolidays = holidays.filter((h) => h.date.startsWith(monthStr));
+                if (monthHolidays.length === 0) {
+                  return <p className="text-sm text-muted-foreground">No holidays declared for this month.</p>;
+                }
+                return (
+                  <div className="space-y-2">
+                    {monthHolidays.map((h) => (
+                      <div key={h.date} className="flex items-center justify-between rounded-md border px-3 py-2">
+                        <div>
+                          <p className="text-sm font-medium">{h.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(h.date + "T00:00:00").toLocaleDateString("en-IN", {
+                              weekday: "long", year: "numeric", month: "long", day: "numeric",
+                            })}
+                          </p>
+                        </div>
+                        <HolidayTypeBadge type={h.type} />
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </TabsContent>
