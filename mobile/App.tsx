@@ -33,6 +33,9 @@ import {
 } from 'firebase/firestore';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
+import * as XLSX from 'xlsx';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { auth, db } from './firebase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -42,6 +45,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -68,6 +73,97 @@ function formatDateStr(date: Date) {
 
 function formatTimeStr(date: Date) {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+// ─── Date range helpers (for admin attendance filter & export) ─────────────
+function addDaysToDateStr(dateStr: string, days: number) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return formatDateStr(d);
+}
+
+function startOfWeekStr(dateStr: string) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() - d.getDay()); // 0 = Sunday
+  return formatDateStr(d);
+}
+
+function endOfWeekStr(dateStr: string) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + (6 - d.getDay()));
+  return formatDateStr(d);
+}
+
+function startOfMonthStr(dateStr: string) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return formatDateStr(new Date(d.getFullYear(), d.getMonth(), 1));
+}
+
+function endOfMonthStr(dateStr: string) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return formatDateStr(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+}
+
+function getAttendanceRangeBounds(
+  range: string,
+  anchor: string,
+  customFrom: string,
+  customTo: string
+): { from: string; to: string } {
+  switch (range) {
+    case 'day':
+      return { from: anchor, to: anchor };
+    case 'week':
+      return { from: startOfWeekStr(anchor), to: endOfWeekStr(anchor) };
+    case 'month':
+      return { from: startOfMonthStr(anchor), to: endOfMonthStr(anchor) };
+    case 'custom':
+      return { from: customFrom, to: customTo };
+    default:
+      return { from: '', to: '' }; // all time
+  }
+}
+
+function calculateHours(inTime: string, outTime: string) {
+  try {
+    const [ih, im] = inTime.split(':').map(Number);
+    const [oh, om] = outTime.split(':').map(Number);
+    let mins = oh * 60 + om - (ih * 60 + im);
+    if (mins < 0) mins += 24 * 60; // crossed midnight
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h}h ${m}m`;
+  } catch {
+    return '';
+  }
+}
+
+function toExportRows(list: any[]) {
+  return list.map((r) => {
+    let officeLocation = '';
+    if (r.status === 'on_duty') {
+      officeLocation = r.onDutyAtName || 'On Duty';
+    } else if (r.status === 'wfh') {
+      officeLocation = 'Work From Home';
+    } else if (r.status === 'leave') {
+      officeLocation = 'On Leave';
+    } else if (r.officeName) {
+      officeLocation = r.officeName;
+    } else if (r.lat && r.lng) {
+      officeLocation = `${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}`;
+    }
+    return {
+      EmployeeID: r.employeeID,
+      Name: r.name,
+      Email: r.email,
+      Project: r.projectId ?? '',
+      Date: r.date,
+      'Punch In': r.time,
+      'Punch Out': r.punchOutTime ?? '',
+      Hours: r.status === 'present' && r.punchOutTime ? calculateHours(r.time, r.punchOutTime) : '',
+      'Office Location': officeLocation,
+    };
+  });
 }
 
 function getDaysInMonth(year: number, month: number) {
@@ -227,6 +323,15 @@ export default function App() {
   const [allAttendance, setAllAttendance] = useState<any[]>([]);
   const [loadingAllAttendance, setLoadingAllAttendance] = useState(false);
   const [attendanceFilter, setAttendanceFilter] = useState('');
+  const [attRange, setAttRange] = useState<'day' | 'week' | 'month' | 'all' | 'custom'>('month');
+  const [attAnchor, setAttAnchor] = useState(formatDateStr(new Date()));
+  const [attDateFrom, setAttDateFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    return formatDateStr(d);
+  });
+  const [attDateTo, setAttDateTo] = useState(formatDateStr(new Date()));
+  const [exporting, setExporting] = useState(false);
 
   // Admin: Employees
   const [allEmployees, setAllEmployees] = useState<any[]>([]);
@@ -324,21 +429,35 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
+    const performSignOut = async () => {
+      try {
+        await signOut(auth);
+      } catch (err: any) {
+        Alert.alert('Error', err.message || 'Failed to sign out');
+        return;
+      }
+      setUser(null);
+      setUserProfile(null);
+      setTodayRecord(null);
+      setEmail('');
+      setPassword('');
+      setActiveTab('punch');
+    };
+
+    if (Platform.OS === 'web') {
+      // Alert.alert is not supported on web — use browser confirm
+      const confirmed =
+        typeof globalThis !== 'undefined' &&
+        typeof (globalThis as any).confirm === 'function'
+          ? (globalThis as any).confirm('Are you sure you want to sign out?')
+          : true;
+      if (confirmed) await performSignOut();
+      return;
+    }
+
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          await signOut(auth);
-          setUser(null);
-          setUserProfile(null);
-          setTodayRecord(null);
-          setEmail('');
-          setPassword('');
-          setActiveTab('punch');
-        },
-      },
+      { text: 'Sign Out', style: 'destructive', onPress: performSignOut },
     ]);
   };
 
@@ -359,7 +478,7 @@ export default function App() {
           };
           await setDoc(ref, { ...seed, createdAt: serverTimestamp() });
           setUserProfile(seed);
-          setActiveTab('superadmin');
+          setActiveTab('dashboard');
           return;
         }
         setUserProfile(null);
@@ -372,9 +491,9 @@ export default function App() {
       }
       setUserProfile(data);
       if (data.role === 'superadmin') {
-        setActiveTab('superadmin');
+        setActiveTab('dashboard');
       } else if (data.role === 'admin') {
-        setActiveTab('admin_attendance');
+        setActiveTab('dashboard');
       } else {
         setActiveTab('punch');
       }
@@ -470,6 +589,43 @@ export default function App() {
       console.log('Error fetching employees:', err);
     } finally {
       setLoadingEmployees(false);
+    }
+  };
+
+  const handleExportAttendance = async () => {
+    if (filteredAttendance.length === 0) {
+      Alert.alert('Export', 'No records match the current filter.');
+      return;
+    }
+    setExporting(true);
+    try {
+      const ws = XLSX.utils.json_to_sheet(toExportRows(filteredAttendance));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+      const filename = `attendance-${attRange}-${attAnchor}.xlsx`;
+
+      if (Platform.OS === 'web') {
+        // SheetJS triggers the browser download directly
+        XLSX.writeFile(wb, filename);
+      } else {
+        const b64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+        const uri = `${FileSystem.cacheDirectory}${filename}`;
+        await FileSystem.writeAsStringAsync(uri, b64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            dialogTitle: 'Save or share attendance report',
+          });
+        } else {
+          Alert.alert('Export', `File saved to ${uri}`);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Export Failed', err.message || 'An error occurred');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -875,6 +1031,7 @@ export default function App() {
     if (activeTab === 'leave') fetchMyLeaves();
     if (activeTab === 'admin_attendance') fetchAdminAttendance();
     if (activeTab === 'admin_employees') fetchEmployeesList();
+    if (activeTab === 'dashboard') { fetchAdminAttendance(); fetchEmployeesList(); }
     if (activeTab === 'admin_requests') fetchPendingRequests();
     if (activeTab === 'superadmin') { fetchSuperData(); fetchHolidays(); }
   }, [activeTab]);
@@ -882,14 +1039,33 @@ export default function App() {
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'superadmin';
   const isSuper = userProfile?.role === 'superadmin';
 
+  // ── Dashboard computed values ──────────────────────────────────────
+  const dashboardTodayStr = formatDateStr(new Date());
+  const dashboardWorkforce = allEmployees.filter((e) => e.role === 'employee');
+  const dashboardPunchedToday = new Set(
+    allAttendance
+      .filter((a) => (a.date || '') === dashboardTodayStr && a.status !== 'on_duty')
+      .map((a) => a.uid)
+  );
+  const dashboardNotPunched = dashboardWorkforce.filter((e) => !dashboardPunchedToday.has(e.id)).length;
+
   // ── Computed ──────────────────────────────────────────────────────────────
-  const filteredAttendance = attendanceFilter
-    ? allAttendance.filter(
-        (a) =>
-          (a.name || '').toLowerCase().includes(attendanceFilter.toLowerCase()) ||
-          (a.date || '').includes(attendanceFilter)
-      )
-    : allAttendance;
+  const attRangeBounds = getAttendanceRangeBounds(attRange, attAnchor, attDateFrom, attDateTo);
+
+  const filteredAttendance = allAttendance.filter((a) => {
+    // Date range filter
+    const d = a.date || '';
+    if (attRangeBounds.from && d < attRangeBounds.from) return false;
+    if (attRangeBounds.to && d > attRangeBounds.to) return false;
+    // Text search filter
+    if (attendanceFilter) {
+      const needle = attendanceFilter.toLowerCase();
+      const nameMatch = (a.name || '').toLowerCase().includes(needle);
+      const dateMatch = d.includes(needle);
+      if (!nameMatch && !dateMatch) return false;
+    }
+    return true;
+  });
 
   const holidaysInMonth = holidays.filter((h) => {
     const [y, m] = (h.date || '').split('-');
@@ -906,6 +1082,20 @@ export default function App() {
           <TVSELogo size="large" />
           <ActivityIndicator color="#ffffff" size="large" style={{ marginTop: 40 }} />
           <Text style={styles.splashSubText}>Loading...</Text>
+        </LinearGradient>
+      </SafeAreaView>
+    );
+  }
+
+  // Profile loading (e.g. right after login) – keep the splash up until the
+  // role is known so super admin is never shown the punch screen.
+  if (user && !userProfile) {
+    return (
+      <SafeAreaView style={styles.splashContainer}>
+        <LinearGradient colors={['#0f172a', '#0369a1', '#0284c7']} style={styles.splashGradient}>
+          <TVSELogo size="large" />
+          <ActivityIndicator color="#ffffff" size="large" style={{ marginTop: 40 }} />
+          <Text style={styles.splashSubText}>Loading profile...</Text>
         </LinearGradient>
       </SafeAreaView>
     );
@@ -1016,15 +1206,17 @@ export default function App() {
             style={styles.tabBar}
             contentContainerStyle={styles.tabBarContent}
           >
-            {/* Punch tab – shown to all roles */}
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'punch' && styles.tabActive]}
-              onPress={() => setActiveTab('punch')}
-            >
-              <Text style={[styles.tabText, activeTab === 'punch' && styles.tabTextActive]}>
-                📍 Punch
-              </Text>
-            </TouchableOpacity>
+            {/* Punch tab – hidden for super admin */}
+            {!isSuper && (
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'punch' && styles.tabActive]}
+                onPress={() => setActiveTab('punch')}
+              >
+                <Text style={[styles.tabText, activeTab === 'punch' && styles.tabTextActive]}>
+                  📍 Punch
+                </Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={[styles.tab, activeTab === 'calendar' && styles.tabActive]}
@@ -1046,6 +1238,15 @@ export default function App() {
 
             {isAdmin && (
               <>
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === 'dashboard' && styles.tabActive]}
+                  onPress={() => setActiveTab('dashboard')}
+                >
+                  <Text style={[styles.tabText, activeTab === 'dashboard' && styles.tabTextActive]}>
+                    📊 Dashboard
+                  </Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   style={[styles.tab, activeTab === 'admin_attendance' && styles.tabActive]}
                   onPress={() => setActiveTab('admin_attendance')}
@@ -1091,7 +1292,7 @@ export default function App() {
           <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
 
             {/* ── PUNCH TAB ── */}
-            {activeTab === 'punch' && (
+            {activeTab === 'punch' && !isSuper && (
               <View>
                 <Text style={styles.pageTitle}>Attendance Punch</Text>
                 <Text style={styles.pageSub}>
@@ -1369,10 +1570,146 @@ export default function App() {
               </View>
             )}
 
+            {/* ── DASHBOARD TAB ── */}
+            {activeTab === 'dashboard' && (
+              <View>
+                <Text style={styles.pageTitle}>Admin Dashboard</Text>
+                <Text style={styles.pageSub}>
+                  {isSuper ? 'Super Admin — all projects' : 'Project overview & attendance stats'}
+                </Text>
+
+                {/* Stat cards */}
+                <View style={styles.statRow}>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{dashboardWorkforce.length}</Text>
+                    <Text style={styles.statLabel}>Employees</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{dashboardPunchedToday.size}</Text>
+                    <Text style={styles.statLabel}>Punched In Today</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{dashboardNotPunched}</Text>
+                    <Text style={styles.statLabel}>Not Punched Today</Text>
+                  </View>
+                </View>
+
+                {/* Employees list */}
+                <View style={styles.card}>
+                  <Text style={styles.sectionTitle}>Employees ({dashboardWorkforce.length})</Text>
+                  {loadingEmployees || loadingAllAttendance ? (
+                    <ActivityIndicator color="#0284c7" style={{ marginVertical: 20 }} />
+                  ) : dashboardWorkforce.length === 0 ? (
+                    <Text style={styles.emptyText}>No employees found</Text>
+                  ) : (
+                    dashboardWorkforce.map((emp) => {
+                      const punchedIn = dashboardPunchedToday.has(emp.id);
+                      return (
+                        <View key={emp.id} style={styles.dashboardEmpRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.cardName}>{emp.name || 'Unnamed'}</Text>
+                            <Text style={styles.cardSub}>{emp.employeeID || emp.id}</Text>
+                            {emp.projectName && (
+                              <Text style={styles.attDetail}>📁 {emp.projectName}</Text>
+                            )}
+                          </View>
+                          <View style={[styles.statusChip, {
+                            backgroundColor: punchedIn ? '#dcfce7' : '#fee2e2'
+                          }]}>
+                            <Text style={[styles.statusChipText, {
+                              color: punchedIn ? '#16a34a' : '#dc2626'
+                            }]}>
+                              {punchedIn ? 'PRESENT' : 'ABSENT'}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              </View>
+            )}
+
             {/* ── ADMIN ATTENDANCE TAB ── */}
             {activeTab === 'admin_attendance' && (
               <View>
-                <Text style={styles.pageTitle}>All Attendance Records</Text>
+                <Text style={styles.pageTitle}>Attendance Records</Text>
+                <Text style={styles.pageSub}>
+                  {attRange === 'all'
+                    ? 'All time'
+                    : attRange === 'custom' && (!attDateFrom || !attDateTo)
+                      ? 'Custom range'
+                      : attRangeBounds.from === attRangeBounds.to
+                        ? attRangeBounds.from
+                        : `${attRangeBounds.from} → ${attRangeBounds.to}`}
+                  {' · '}{filteredAttendance.length} record{filteredAttendance.length !== 1 ? 's' : ''}
+                </Text>
+
+                {/* Date range quick-select buttons */}
+                <View style={styles.rangeRow}>
+                  {(['day', 'week', 'month', 'all', 'custom'] as const).map((r) => (
+                    <TouchableOpacity
+                      key={r}
+                      style={[styles.rangeBtn, attRange === r && styles.rangeBtnActive]}
+                      onPress={() => setAttRange(r)}
+                    >
+                      <Text style={[styles.rangeBtnText, attRange === r && styles.rangeBtnTextActive]}>
+                        {r === 'day' ? 'Today' : r === 'week' ? 'Week' : r === 'month' ? 'Month' : r === 'all' ? 'All' : 'Custom'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Anchor navigation for day/week/month */}
+                {attRange !== 'all' && attRange !== 'custom' && (
+                  <View style={styles.rangeNavRow}>
+                    <TouchableOpacity
+                      style={styles.rangeNavBtn}
+                      onPress={() => setAttAnchor(addDaysToDateStr(attAnchor, attRange === 'day' ? -1 : -7))}
+                    >
+                      <Text style={styles.rangeNavBtnText}>◀ Prev</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.rangeNavLabel}>{attAnchor}</Text>
+                    <TouchableOpacity
+                      style={styles.rangeNavBtn}
+                      onPress={() => setAttAnchor(addDaysToDateStr(attAnchor, attRange === 'day' ? 1 : 7))}
+                    >
+                      <Text style={styles.rangeNavBtnText}>Next ▶</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* From / To inputs for custom date range */}
+                {attRange === 'custom' && (
+                  <View style={styles.rangeCustomRow}>
+                    <View style={{ flex: 1, marginRight: 6 }}>
+                      <Text style={styles.rangeLabel}>From (YYYY-MM-DD)</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="2026-07-01"
+                        placeholderTextColor="#94a3b8"
+                        value={attDateFrom}
+                        onChangeText={setAttDateFrom}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 6 }}>
+                      <Text style={styles.rangeLabel}>To (YYYY-MM-DD)</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="2026-07-31"
+                        placeholderTextColor="#94a3b8"
+                        value={attDateTo}
+                        onChangeText={setAttDateTo}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                    </View>
+                  </View>
+                )}
+
+                {/* Search */}
                 <TextInput
                   style={[styles.input, { marginBottom: 12 }]}
                   placeholder="Search by name or date..."
@@ -1380,13 +1717,30 @@ export default function App() {
                   value={attendanceFilter}
                   onChangeText={setAttendanceFilter}
                 />
-                <TouchableOpacity style={styles.outlineBtn} onPress={fetchAdminAttendance}>
-                  <Text style={styles.outlineBtnText}>🔄 Refresh</Text>
-                </TouchableOpacity>
+
+                {/* Action buttons */}
+                <View style={styles.rangeActionRow}>
+                  <TouchableOpacity
+                    style={[styles.primaryBtn, { flex: 1 }]}
+                    onPress={handleExportAttendance}
+                    disabled={exporting}
+                  >
+                    <LinearGradient colors={['#0369a1', '#0284c7']} style={styles.primaryBtnGrad}>
+                      <Text style={[styles.primaryBtnText, exporting && { opacity: 0.6 }]}>
+                        {exporting ? '⏳ Exporting…' : '⬇️ Download Excel'}
+                      </Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.outlineBtn, { flex: 1 }]} onPress={fetchAdminAttendance}>
+                    <Text style={styles.outlineBtnText}>🔄 Refresh</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Attendance list */}
                 {loadingAllAttendance ? (
                   <ActivityIndicator color="#0284c7" style={{ marginVertical: 20 }} />
                 ) : filteredAttendance.length === 0 ? (
-                  <Text style={styles.emptyText}>No attendance records found</Text>
+                  <Text style={styles.emptyText}>No attendance records found for this range</Text>
                 ) : (
                   filteredAttendance.map((item) => (
                     <View key={item.id} style={styles.card}>
@@ -1406,6 +1760,11 @@ export default function App() {
                       <Text style={styles.attDetail}>
                         🕐 In: {item.time || '-'}  {item.punchOutTime ? `· Out: ${item.punchOutTime}` : ''}
                       </Text>
+                      {item.punchOutTime && (
+                        <Text style={styles.attDetail}>
+                          ⏱️ Hours: {calculateHours(item.time, item.punchOutTime)}
+                        </Text>
+                      )}
                       {item.projectName && (
                         <Text style={styles.attDetail}>📁 {item.projectName}</Text>
                       )}
@@ -1965,6 +2324,36 @@ const styles = StyleSheet.create({
   pageSub: { fontSize: 12, color: '#64748b', marginBottom: 16 },
   pageTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
 
+  // Dashboard
+  statRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statValue: { fontSize: 24, fontWeight: '800', color: '#0f172a' },
+  statLabel: { fontSize: 11, color: '#64748b', marginTop: 2, textAlign: 'center' },
+  dashboardEmpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+
   // Cards
   card: {
     backgroundColor: '#ffffff',
@@ -2327,6 +2716,54 @@ const styles = StyleSheet.create({
   roleChipActive: { backgroundColor: '#0284c7', borderColor: '#0284c7' },
   roleChipText: { fontSize: 12, fontWeight: '600', color: '#475569' },
   roleChipTextActive: { color: '#ffffff' },
+
+  // Admin attendance date range filter
+  rangeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+    flexWrap: 'wrap',
+  },
+  rangeBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  rangeBtnActive: {
+    backgroundColor: '#0284c7',
+    borderColor: '#0284c7',
+  },
+  rangeBtnText: { fontSize: 13, fontWeight: '600', color: '#475569' },
+  rangeBtnTextActive: { color: '#ffffff' },
+  rangeNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  rangeNavBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  rangeNavBtnText: { fontSize: 13, fontWeight: '600', color: '#0284c7' },
+  rangeNavLabel: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  rangeCustomRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  rangeLabel: { fontSize: 12, fontWeight: '600', color: '#64748b', marginBottom: 6 },
+  rangeActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
 
   emptyText: { fontSize: 14, color: '#94a3b8', textAlign: 'center', marginVertical: 20 },
 });
