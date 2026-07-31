@@ -147,6 +147,18 @@ function AttendancePage() {
     return dedupeRowsByDay(filteredRows);
   }, [rows, range, anchor, empFilter]);
 
+  const calculateHours = (inTime?: string, outTime?: string) => {
+    if (!inTime || !outTime) return "";
+    const [h1, m1] = inTime.split(":").map(Number);
+    const [h2, m2] = outTime.split(":").map(Number);
+    if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return "";
+    let diffMinutes = (h2 * 60 + m2) - (h1 * 60 + m1);
+    if (diffMinutes < 0) diffMinutes += 24 * 60;
+    const hrs = Math.floor(diffMinutes / 60);
+    const mins = diffMinutes % 60;
+    return `${hrs}h ${mins}m`;
+  };
+
   const toExportRows = (list: Row[]) => list.map((r) => {
     let officeLocation = "Field / Unknown";
     if (r.status === "on_duty") {
@@ -164,6 +176,7 @@ function AttendancePage() {
       EmployeeID: r.employeeID, Name: r.name, Email: r.email,
       Project: r.projectId ?? "",
       Date: r.date, "Punch In": r.time, "Punch Out": r.punchOutTime ?? "",
+      "Hours": r.status === "present" && r.punchOutTime ? calculateHours(r.time, r.punchOutTime) : "",
       "Office Location": officeLocation,
     };
   });
@@ -358,6 +371,7 @@ function AttendancePage() {
                     <th className="p-3">Date</th>
                     <th className="p-3">In</th>
                     <th className="p-3">Out</th>
+                    <th className="p-3">Hours</th>
                     <th className="p-3">Employee</th>
                     <th className="p-3">ID</th>
                     <th className="p-3">Project</th>
@@ -381,63 +395,79 @@ function AttendancePage() {
                     return groups.flatMap((g) => [
                       ...(groupByProject ? [(
                         <tr key={`g-${g.key}`} className="bg-muted/30">
-                          <td colSpan={8} className="p-2 text-xs font-semibold uppercase text-muted-foreground">
+                          <td colSpan={9} className="p-2 text-xs font-semibold uppercase text-muted-foreground">
                             {g.key} — {g.list.length}
                           </td>
                         </tr>
                       )] : []),
-                      ...g.list.map((r) => (
-                        <tr key={r.id} className="border-t">
-                          <td className="p-3">{r.date}</td>
-                          <td className="p-3 font-mono">
-                            {r.status === "on_duty"
-                              ? <span className="rounded bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700">On Duty{r.onDutyAtName ? ` @ ${r.onDutyAtName}` : ""}</span>
-                              : r.status === "leave"
-                              ? <span className="rounded bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-700">Leave</span>
-                              : r.status === "wfh"
-                              ? <span className="rounded bg-blue-500/15 px-2 py-0.5 text-xs font-semibold text-blue-700">WFH</span>
-                              : r.time}
-                          </td>
-                          <td className="p-3 font-mono">
-                            {r.status === "on_duty" || r.status === "leave" || r.status === "wfh"
-                              ? "—"
-                              : (r.punchOutTime ?? <span className="text-muted-foreground">—</span>)}
-                          </td>
-                          <td className="p-3">{r.name}</td>
-                          <td className="p-3 font-mono text-xs">{r.employeeID}</td>
-                          <td className="p-3 text-xs">{r.projectId ?? <span className="text-muted-foreground">—</span>}</td>
-                          <td className="p-3 text-xs text-muted-foreground">
-                            {r.status === "leave" || r.status === "wfh"
-                              ? r.status === "leave" ? r.leaveReason : r.wfhReason
-                              : `${r.lat?.toFixed(5)}, ${r.lng?.toFixed(5)}`}
-                          </td>
-                          <td className="p-3">
-                            <div className="flex justify-end gap-1">
-                              <Button size="sm" variant="ghost" onClick={() => { setEditing(r); setEditOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button size="sm" variant="ghost"><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete entry?</AlertDialogTitle>
-                                    <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => remove(r)}>Delete</AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </td>
-                        </tr>
-                      )),
+                      ...g.list.map((r) => {
+                        const calculateHours = (inTime?: string, outTime?: string) => {
+                          if (!inTime || !outTime) return "—";
+                          const [h1, m1] = inTime.split(":").map(Number);
+                          const [h2, m2] = outTime.split(":").map(Number);
+                          if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return "—";
+                          let diffMinutes = (h2 * 60 + m2) - (h1 * 60 + m1);
+                          if (diffMinutes < 0) diffMinutes += 24 * 60;
+                          const hrs = Math.floor(diffMinutes / 60);
+                          const mins = diffMinutes % 60;
+                          return `${hrs}h ${mins}m`;
+                        };
+                        return (
+                          <tr key={r.id} className="border-t">
+                            <td className="p-3">{r.date}</td>
+                            <td className="p-3 font-mono">
+                              {r.status === "on_duty"
+                                ? <span className="rounded bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700">On Duty{r.onDutyAtName ? ` @ ${r.onDutyAtName}` : ""}</span>
+                                : r.status === "leave"
+                                ? <span className="rounded bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-700">Leave</span>
+                                : r.status === "wfh"
+                                ? <span className="rounded bg-blue-500/15 px-2 py-0.5 text-xs font-semibold text-blue-700">WFH</span>
+                                : r.time}
+                            </td>
+                            <td className="p-3 font-mono">
+                              {r.status === "on_duty" || r.status === "leave" || r.status === "wfh"
+                                ? "—"
+                                : (r.punchOutTime ?? <span className="text-muted-foreground">—</span>)}
+                            </td>
+                            <td className="p-3 font-mono text-xs font-semibold text-emerald-700">
+                              {r.status === "present" && r.punchOutTime ? calculateHours(r.time, r.punchOutTime) : "—"}
+                            </td>
+                            <td className="p-3">{r.name}</td>
+                            <td className="p-3 font-mono text-xs">{r.employeeID}</td>
+                            <td className="p-3 text-xs">{r.projectId ?? <span className="text-muted-foreground">—</span>}</td>
+                            <td className="p-3 text-xs text-muted-foreground">
+                              {r.status === "leave" || r.status === "wfh"
+                                ? r.status === "leave" ? r.leaveReason : r.wfhReason
+                                : `${r.lat?.toFixed(5)}, ${r.lng?.toFixed(5)}`}
+                            </td>
+                            <td className="p-3">
+                              <div className="flex justify-end gap-1">
+                                <Button size="sm" variant="ghost" onClick={() => { setEditing(r); setEditOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button size="sm" variant="ghost"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Delete entry?</AlertDialogTitle>
+                                      <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => remove(r)}>Delete</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }),
 
                     ]);
                   })()}
                   {filtered.length === 0 && (
-                    <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">No records</td></tr>
+                    <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">No records</td></tr>
                   )}
                 </tbody>
               </table>

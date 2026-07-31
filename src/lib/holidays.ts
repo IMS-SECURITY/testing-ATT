@@ -3,11 +3,8 @@ import {
   deleteDoc,
   doc,
   getDocs,
-  orderBy,
-  query,
   serverTimestamp,
   setDoc,
-  where,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -23,25 +20,26 @@ export interface Holiday {
 
 const COL = "holidays";
 
-/** Load all holidays for a given year. */
+/**
+ * Load all holidays for a given year.
+ * We fetch the whole collection and filter client-side to avoid needing
+ * a Firestore composite index (which would require the Firebase Console to create it).
+ */
 export async function loadHolidaysForYear(year: number): Promise<Holiday[]> {
-  const start = `${year}-01-01`;
-  const end = `${year}-12-31`;
-  const snap = await getDocs(
-    query(
-      collection(db, COL),
-      where("date", ">=", start),
-      where("date", "<=", end),
-      orderBy("date", "asc"),
-    ),
-  );
-  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Holiday, "id">) }));
+  const snap = await getDocs(collection(db, COL));
+  const yearStr = String(year);
+  return snap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as Omit<Holiday, "id">) }))
+    .filter((h) => h.date?.startsWith(yearStr))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /** Load all holidays (for super admin management). */
 export async function loadAllHolidays(): Promise<Holiday[]> {
-  const snap = await getDocs(query(collection(db, COL), orderBy("date", "asc")));
-  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Holiday, "id">) }));
+  const snap = await getDocs(collection(db, COL));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as Omit<Holiday, "id">) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /** Upsert a holiday. The doc ID is the date string "YYYY-MM-DD". */

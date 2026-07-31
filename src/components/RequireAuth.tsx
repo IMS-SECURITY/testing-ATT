@@ -64,8 +64,8 @@ export function RequireAuth({
     (role === "super"
       ? false
       : role === "staff"
-      ? isAdmin
-      : profile.role === role);
+        ? isAdmin
+        : profile.role === role);
   if (!allowed) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
@@ -145,9 +145,8 @@ function NavLink({
   return (
     <Link
       to={to}
-      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-        active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"
-      }`}
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+        }`}
     >
       {icon}
       {children}

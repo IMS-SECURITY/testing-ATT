@@ -713,7 +713,19 @@ function PunchPage() {
                       ) : (
                         <>
                           <Badge>In: {r.time}</Badge>
-                          {r.punchOutTime && <Badge variant="outline">Out: {r.punchOutTime}</Badge>}
+                          {r.punchOutTime && (
+                            <>
+                              <Badge variant="outline">Out: {r.punchOutTime}</Badge>
+                              {(() => {
+                                const [h1, m1] = r.time.split(":").map(Number);
+                                const [h2, m2] = r.punchOutTime.split(":").map(Number);
+                                if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return null;
+                                let diffMinutes = (h2 * 60 + m2) - (h1 * 60 + m1);
+                                if (diffMinutes < 0) diffMinutes += 24 * 60;
+                                return <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-700 font-semibold border-emerald-500/30">Hours: {Math.floor(diffMinutes / 60)}h {diffMinutes % 60}m</Badge>;
+                              })()}
+                            </>
+                          )}
                         </>
                       )}
                     </div>
@@ -792,14 +804,33 @@ function PunchPage() {
                           ) : r.status === "leave" ? (
                             <Badge variant="destructive">Leave</Badge>
                           ) : (
-                            <>
-                              <Badge>In: {r.time}</Badge>
-                              {r.punchOutTime ? (
-                                <Badge variant="outline">Out: {r.punchOutTime}</Badge>
-                              ) : (
-                                <Badge variant="destructive">No punch-out</Badge>
-                              )}
-                            </>
+                            (() => {
+                              const calculateHours = (inTime?: string, outTime?: string) => {
+                                if (!inTime || !outTime) return null;
+                                const [h1, m1] = inTime.split(":").map(Number);
+                                const [h2, m2] = outTime.split(":").map(Number);
+                                if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return null;
+                                let diffMinutes = (h2 * 60 + m2) - (h1 * 60 + m1);
+                                if (diffMinutes < 0) diffMinutes += 24 * 60; // crossover midnight if any
+                                const hrs = Math.floor(diffMinutes / 60);
+                                const mins = diffMinutes % 60;
+                                return `${hrs}h ${mins}m`;
+                              };
+                              const hoursStr = calculateHours(r.time, r.punchOutTime);
+                              return (
+                                <>
+                                  <Badge>In: {r.time}</Badge>
+                                  {r.punchOutTime ? (
+                                    <>
+                                      <Badge variant="outline">Out: {r.punchOutTime}</Badge>
+                                      {hoursStr && <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-700 font-semibold border-emerald-500/30">Hours: {hoursStr}</Badge>}
+                                    </>
+                                  ) : (
+                                    <Badge variant="destructive">No punch-out</Badge>
+                                  )}
+                                </>
+                              );
+                            })()
                           )}
                         </div>
                       </div>
