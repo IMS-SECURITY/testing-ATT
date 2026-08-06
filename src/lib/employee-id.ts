@@ -1,4 +1,4 @@
-import { doc, runTransaction, serverTimestamp } from "firebase/firestore";
+import { doc, runTransaction, serverTimestamp, getDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
 const COUNTER_REF = doc(db, "meta", "employeeCounter");
@@ -12,4 +12,11 @@ export async function nextEmployeeId(): Promise<string> {
     return `EMP${String(next).padStart(3, "0")}`;
   });
   return id;
+}
+
+/** Gets the next employee ID without incrementing the counter. */
+export async function peekNextEmployeeId(): Promise<string> {
+  const snap = await getDoc(COUNTER_REF);
+  const next = snap.exists() ? (snap.data().next as number) : 1;
+  return `EMP${String(next).padStart(3, "0")}`;
 }

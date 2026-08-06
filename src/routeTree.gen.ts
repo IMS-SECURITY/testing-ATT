@@ -17,6 +17,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AppChangePasswordRouteImport } from './routes/app.change-password'
 import { Route as AdminRequestsRouteImport } from './routes/admin.requests'
 import { Route as AdminEmployeesRouteImport } from './routes/admin.employees'
+import { Route as AdminDashboardRouteImport } from './routes/admin.dashboard'
 import { Route as AdminAttendanceRouteImport } from './routes/admin.attendance'
 
 const SuperRoute = SuperRouteImport.update({
@@ -59,6 +60,11 @@ const AdminEmployeesRoute = AdminEmployeesRouteImport.update({
   path: '/admin/employees',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminDashboardRoute = AdminDashboardRouteImport.update({
+  id: '/admin/dashboard',
+  path: '/admin/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminAttendanceRoute = AdminAttendanceRouteImport.update({
   id: '/admin/attendance',
   path: '/admin/attendance',
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/super': typeof SuperRoute
   '/admin/attendance': typeof AdminAttendanceRoute
+  '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/employees': typeof AdminEmployeesRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/app/change-password': typeof AppChangePasswordRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/super': typeof SuperRoute
   '/admin/attendance': typeof AdminAttendanceRoute
+  '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/employees': typeof AdminEmployeesRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/app/change-password': typeof AppChangePasswordRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/super': typeof SuperRoute
   '/admin/attendance': typeof AdminAttendanceRoute
+  '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/employees': typeof AdminEmployeesRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/app/change-password': typeof AppChangePasswordRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/super'
     | '/admin/attendance'
+    | '/admin/dashboard'
     | '/admin/employees'
     | '/admin/requests'
     | '/app/change-password'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/super'
     | '/admin/attendance'
+    | '/admin/dashboard'
     | '/admin/employees'
     | '/admin/requests'
     | '/app/change-password'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/super'
     | '/admin/attendance'
+    | '/admin/dashboard'
     | '/admin/employees'
     | '/admin/requests'
     | '/app/change-password'
@@ -140,6 +152,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   SuperRoute: typeof SuperRoute
   AdminAttendanceRoute: typeof AdminAttendanceRoute
+  AdminDashboardRoute: typeof AdminDashboardRoute
   AdminEmployeesRoute: typeof AdminEmployeesRoute
   AdminRequestsRoute: typeof AdminRequestsRoute
   AppChangePasswordRoute: typeof AppChangePasswordRoute
@@ -205,6 +218,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminEmployeesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/dashboard': {
+      id: '/admin/dashboard'
+      path: '/admin/dashboard'
+      fullPath: '/admin/dashboard'
+      preLoaderRoute: typeof AdminDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/attendance': {
       id: '/admin/attendance'
       path: '/admin/attendance'
@@ -220,6 +240,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   SuperRoute: SuperRoute,
   AdminAttendanceRoute: AdminAttendanceRoute,
+  AdminDashboardRoute: AdminDashboardRoute,
   AdminEmployeesRoute: AdminEmployeesRoute,
   AdminRequestsRoute: AdminRequestsRoute,
   AppChangePasswordRoute: AppChangePasswordRoute,

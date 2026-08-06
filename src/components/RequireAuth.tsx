@@ -94,6 +94,7 @@ export function RequireAuth({
             {isStaff ? (
               <>
                 <NavLink to="/admin" active={path === "/admin"} icon={<LayoutDashboard className="h-4 w-4" />}>Dashboard</NavLink>
+                <NavLink to="/admin/dashboard" active={path.startsWith("/admin/dashboard")} icon={<LayoutDashboard className="h-4 w-4" />}>Monthly</NavLink>
                 <NavLink to="/admin/employees" active={path.startsWith("/admin/employees")} icon={<Users className="h-4 w-4" />}>Employees</NavLink>
                 <NavLink to="/admin/attendance" active={path.startsWith("/admin/attendance")} icon={<ClipboardList className="h-4 w-4" />}>Attendance</NavLink>
                 {!isSuper && <NavLink to="/app" active={path === "/app"} icon={<MapPin className="h-4 w-4" />}>Punch</NavLink>}
@@ -117,6 +118,7 @@ export function RequireAuth({
           {isStaff ? (
             <>
               <NavLink to="/admin" active={path === "/admin"} icon={<LayoutDashboard className="h-4 w-4" />}>Dashboard</NavLink>
+              <NavLink to="/admin/dashboard" active={path.startsWith("/admin/dashboard")} icon={<LayoutDashboard className="h-4 w-4" />}>Monthly</NavLink>
               <NavLink to="/admin/employees" active={path.startsWith("/admin/employees")} icon={<Users className="h-4 w-4" />}>Employees</NavLink>
               <NavLink to="/admin/attendance" active={path.startsWith("/admin/attendance")} icon={<ClipboardList className="h-4 w-4" />}>Attendance</NavLink>
             </>

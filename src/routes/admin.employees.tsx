@@ -27,7 +27,7 @@ import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { ProjectPicker, useAvailableProjects } from "@/components/ProjectPicker";
 import { loadAllOffices, type Office } from "@/lib/offices";
-import { nextEmployeeId } from "@/lib/employee-id";
+import { nextEmployeeId, peekNextEmployeeId } from "@/lib/employee-id";
 
 export const Route = createFileRoute("/admin/employees")({
   component: () => (
@@ -120,9 +120,10 @@ function EmployeesPage() {
         : isSuper
         ? []
         : adminProjectIds;
+      let list: EmpRow[] = [];
       if (isSuper && scopeIds.length === 0) {
         const s = await getDocs(collection(db, "employees"));
-        setRows(s.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<EmpRow, "id">) })));
+        list = s.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<EmpRow, "id">) }));
       } else {
         // Combine results from projectIds array-contains-any AND legacy projectId in (...)
         const snaps = await Promise.all([
@@ -137,8 +138,27 @@ function EmployeesPage() {
         snaps.flatMap((s) => s.docs).forEach((d) => {
           byId.set(d.id, { id: d.id, ...(d.data() as Omit<EmpRow, "id">) });
         });
-        setRows(Array.from(byId.values()));
+        list = Array.from(byId.values());
       }
+
+      // Sort: superadmin/admin at the top, then employees numerically by their employeeID
+      list.sort((a, b) => {
+        const roleWeight = (r: string) => {
+          if (r === "superadmin") return 0;
+          if (r === "admin") return 1;
+          return 2;
+        };
+        const rA = roleWeight(a.role);
+        const rB = roleWeight(b.role);
+        if (rA !== rB) return rA - rB;
+
+        const numA = parseInt(a.employeeID?.replace(/\D/g, "") || "0", 10);
+        const numB = parseInt(b.employeeID?.replace(/\D/g, "") || "0", 10);
+        if (numA !== numB) return numA - numB;
+        return (a.employeeID || "").localeCompare(b.employeeID || "");
+      });
+
+      setRows(list);
     } catch (e) {
       toast.error(
         (e instanceof Error ? e.message : "Failed to load") +
@@ -174,9 +194,9 @@ function EmployeesPage() {
     const firstOffice = projectOffices[0];
     let newId = "";
     try {
-      newId = await nextEmployeeId();
+      newId = await peekNextEmployeeId();
     } catch {
-      toast.error("Failed to generate employee ID");
+      toast.error("Failed to generate preview employee ID");
       return;
     }
     setEditing(null);
@@ -300,9 +320,10 @@ function EmployeesPage() {
           setBusy(false);
           return toast.error("Password must be at least 6 characters");
         }
+        const reservedId = await nextEmployeeId();
         const uid = await createAuthUser(form.email.trim(), form.password);
         await setDoc(doc(db, "employees", uid), {
-          employeeID: form.employeeID,
+          employeeID: reservedId,
           name: form.name,
           email: form.email.trim(),
           role: form.role,
@@ -324,6 +345,92 @@ function EmployeesPage() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Save failed";
       toast.error(msg.replace("Firebase: ", ""));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resequenceEmployeeIds = async () => {
+    console.log("resequenceEmployeeIds: Button clicked");
+    if (!confirm("Are you sure you want to re-sequence all employee IDs sequentially? This will update all employees and their corresponding attendance/request logs to match.")) {
+      console.log("resequenceEmployeeIds: Cancelled by user");
+      return;
+    }
+    setBusy(true);
+    try {
+      console.log("resequenceEmployeeIds: Fetching employees...");
+      const empSnap = await getDocs(collection(db, "employees"));
+      console.log(`resequenceEmployeeIds: Found ${empSnap.docs.length} total employee docs`);
+      
+      const emps = empSnap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as Omit<EmpRow, "id">) }))
+        .filter((e) => e.role === "employee");
+      console.log(`resequenceEmployeeIds: Filtered to ${emps.length} employees`);
+
+      // Sort numerically by the numeric suffix of their current employeeID, falling back to name/email
+      emps.sort((a, b) => {
+        const numA = parseInt(a.employeeID?.replace(/\D/g, "") || "0", 10);
+        const numB = parseInt(b.employeeID?.replace(/\D/g, "") || "0", 10);
+        if (numA !== numB) return numA - numB;
+        return a.email.localeCompare(b.email);
+      });
+
+      console.log("resequenceEmployeeIds: Sorted list:", emps.map(e => `${e.name} (${e.employeeID})`));
+
+      let updatedCount = 0;
+      for (let i = 0; i < emps.length; i++) {
+        const emp = emps[i];
+        const newID = `EMP${String(i + 1).padStart(3, "0")}`;
+        console.log(`resequenceEmployeeIds: Processing ${emp.name}. Current: ${emp.employeeID}, Target: ${newID}`);
+
+        if (emp.employeeID !== newID) {
+          console.log(`resequenceEmployeeIds: Updating ${emp.name} to ${newID}...`);
+          // Update employee profile
+          await updateDoc(doc(db, "employees", emp.id), { employeeID: newID });
+
+          // Update attendance logs
+          const attSnap = await getDocs(query(collection(db, "attendance"), where("uid", "==", emp.id)));
+          console.log(`resequenceEmployeeIds: Found ${attSnap.docs.length} attendance logs to update`);
+          for (const d of attSnap.docs) {
+            await updateDoc(doc(db, "attendance", d.id), { employeeID: newID });
+          }
+
+          // Update leave requests
+          const leaveSnap = await getDocs(query(collection(db, "leaveRequests"), where("uid", "==", emp.id)));
+          console.log(`resequenceEmployeeIds: Found ${leaveSnap.docs.length} leave requests to update`);
+          for (const d of leaveSnap.docs) {
+            await updateDoc(doc(db, "leaveRequests", d.id), { employeeID: newID });
+          }
+
+          // Update WFH requests
+          const wfhSnap = await getDocs(query(collection(db, "wfhRequests"), where("uid", "==", emp.id)));
+          console.log(`resequenceEmployeeIds: Found ${wfhSnap.docs.length} WFH requests to update`);
+          for (const d of wfhSnap.docs) {
+            await updateDoc(doc(db, "wfhRequests", d.id), { employeeID: newID });
+          }
+
+          // Update regularization requests
+          const regSnap = await getDocs(query(collection(db, "regularizationRequests"), where("uid", "==", emp.id)));
+          console.log(`resequenceEmployeeIds: Found ${regSnap.docs.length} regularization requests to update`);
+          for (const d of regSnap.docs) {
+            await updateDoc(doc(db, "regularizationRequests", d.id), { employeeID: newID });
+          }
+
+          updatedCount++;
+        }
+      }
+
+      // Update database next employee counter reference
+      console.log(`resequenceEmployeeIds: Setting employeeCounter.next to ${emps.length + 1}`);
+      const COUNTER_REF = doc(db, "meta", "employeeCounter");
+      await setDoc(COUNTER_REF, { next: emps.length + 1 }, { merge: true });
+
+      toast.success(`Successfully re-sequenced employee IDs. Updated ${updatedCount} employees.`);
+      console.log("resequenceEmployeeIds: Finished successfully");
+      await load();
+    } catch (e) {
+      console.error("resequenceEmployeeIds error:", e);
+      toast.error(e instanceof Error ? e.message : "Failed to re-sequence IDs");
     } finally {
       setBusy(false);
     }
@@ -357,6 +464,11 @@ function EmployeesPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ProjectPicker projects={projects} value={activeProjectId} onChange={setActiveProjectId} />
+          {canEdit && (
+            <Button variant="outline" onClick={resequenceEmployeeIds} disabled={busy}>
+              Re-sequence IDs
+            </Button>
+          )}
           {canEdit && <Button onClick={openNew}><Plus className="mr-1 h-4 w-4" /> New employee</Button>}
         </div>
       </div>
