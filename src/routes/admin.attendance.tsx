@@ -50,6 +50,7 @@ interface Row {
   onDutyAtName?: string;
   leaveReason?: string;
   wfhReason?: string;
+  officeName?: string;
 }
 
 

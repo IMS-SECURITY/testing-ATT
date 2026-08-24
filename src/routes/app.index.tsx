@@ -345,10 +345,14 @@ function PunchPage() {
     setBusy(true);
     try {
       const pos = await getCurrentPosition();
-      const { latitude, longitude } = pos.coords;
+      const { latitude, longitude, accuracy } = pos.coords;
       const dist = distanceKm(latitude, longitude, selectedAssignment.officeLat, selectedAssignment.officeLng);
       if (dist > 1) {
-        toast.error(`You're ${dist.toFixed(2)} km from the ${selectedAssignment.projectName ?? selectedAssignment.projectId} office. Must be within 1 km.`);
+        let errorMsg = `You're ${dist.toFixed(2)} km from the ${selectedAssignment.projectName ?? selectedAssignment.projectId} office. Must be within 1 km (Accuracy: ±${accuracy.toFixed(0)}m).`;
+        if (accuracy > 150) {
+          errorMsg += " Tip: Your device is using low-accuracy cellular/IP location. Try stepping near a window, enabling Wi-Fi/Bluetooth scanning, or using a mobile device.";
+        }
+        toast.error(errorMsg, { duration: 8000 });
         setBusy(false);
         return;
       }
@@ -415,10 +419,14 @@ function PunchPage() {
     setBusy(true);
     try {
       const pos = await getCurrentPosition();
-      const { latitude, longitude } = pos.coords;
+      const { latitude, longitude, accuracy } = pos.coords;
       const dist = distanceKm(latitude, longitude, a.officeLat, a.officeLng);
       if (dist > 1) {
-        toast.error(`You're ${dist.toFixed(2)} km from the office. Punch-out must be within 1 km.`);
+        let errorMsg = `You're ${dist.toFixed(2)} km from the office. Punch-out must be within 1 km (Accuracy: ±${accuracy.toFixed(0)}m).`;
+        if (accuracy > 150) {
+          errorMsg += " Tip: Your device is using low-accuracy cellular/IP location. Try stepping near a window, enabling Wi-Fi/Bluetooth scanning, or using a mobile device.";
+        }
+        toast.error(errorMsg, { duration: 8000 });
         setBusy(false);
         return;
       }
