@@ -12,7 +12,9 @@ export function distanceKm(lat1: number, lng1: number, lat2: number, lng2: numbe
 
 export function getCurrentPosition(options?: PositionOptions): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) return reject(new Error("Geolocation not supported"));
+    if (!navigator.geolocation) {
+      return reject(new Error("Location is not detected: Geolocation is not supported on this device or browser."));
+    }
 
     let completed = false;
     let watchId: number | null = null;
@@ -24,7 +26,7 @@ export function getCurrentPosition(options?: PositionOptions): Promise<Geolocati
       if (bestPosition) {
         resolve(bestPosition);
       } else {
-        reject(new Error("Location request timed out. Please ensure GPS is enabled and permissions are granted."));
+        reject(new Error("Location is not detected: Request timed out. Please ensure GPS is enabled and location permission is granted."));
       }
     }, 7000);
 
@@ -41,7 +43,15 @@ export function getCurrentPosition(options?: PositionOptions): Promise<Geolocati
       // If we haven't received any position yet, propagate error. Otherwise, we can ignore and wait for timeout to return the last known good position.
       if (!bestPosition) {
         cleanup();
-        reject(error);
+        let message = "Location is not detected. Please ensure GPS is enabled and try again.";
+        if (error.code === error.PERMISSION_DENIED) {
+          message = "Location is not detected: Permission not granted. Please allow location access in your browser settings.";
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          message = "Location is not detected: GPS signal unavailable. Please ensure your device location is turned on.";
+        } else if (error.code === error.TIMEOUT) {
+          message = "Location is not detected: Request timed out. Please check your GPS signal and try again.";
+        }
+        reject(new Error(message));
       }
     };
 

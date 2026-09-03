@@ -665,6 +665,10 @@ export default function App() {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
       setLocationStatus('Location permission denied.');
+      Alert.alert(
+        'Location Not Detected',
+        'Location permission is not granted. Please allow location access in your device settings to punch in/out.'
+      );
       return null;
     }
     setLocationStatus('Acquiring GPS position...');
@@ -684,7 +688,11 @@ export default function App() {
       }
       return coords;
     } catch (e) {
-      setLocationStatus('Failed to get GPS position');
+      setLocationStatus('Location is not detected');
+      Alert.alert(
+        'Location Not Detected',
+        'Could not detect your GPS location. Please make sure location/GPS is turned on in your device and try again.'
+      );
       return null;
     }
   };
